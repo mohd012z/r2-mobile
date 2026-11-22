@@ -30,10 +30,8 @@ jobs:
           ndk-version: r26d
           add-to-path: false
 
-      - name: Install meson, ninja and QEMU user emulation
-        run: |
-          pip install meson ninja
-          sudo apt-get update -qq && sudo apt-get install -y -qq qemu-user-static
+      - name: Install meson and ninja
+        run: pip install meson ninja
 
       - name: Build radare2 for arm64 and package libr2.so
         env:
