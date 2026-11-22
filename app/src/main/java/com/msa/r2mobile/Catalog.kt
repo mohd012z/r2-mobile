@@ -1,7 +1,7 @@
 package com.msa.r2mobile
 
 /** How a feature runs: through radare2, or natively in the app. */
-enum class Action { R2, NATIVE_INFO, NATIVE_ZIP_LIST, NATIVE_EXTRACT_DEX }
+enum class Action { R2, NATIVE_INFO, NATIVE_ZIP_LIST, NATIVE_EXTRACT_DEX, NATIVE_MANIFEST }
 
 /**
  * One numbered function. [number] is what the user types or taps.
@@ -89,6 +89,10 @@ object Catalog {
         add("APK", "Extract classes.dex from APK", Action.NATIVE_EXTRACT_DEX, "", setOf(FileCategory.APK),
             "Pulls out the app's Dalvik bytecode (classes.dex). Afterwards the DEX file becomes the target, " +
             "so functions 2 to 19 work on it. Extracted files stay in the app's private storage.")
+        add("APK", "Decode AndroidManifest.xml", Action.NATIVE_MANIFEST, "", setOf(FileCategory.APK),
+            "Turns the app's binary manifest into readable XML: package name, version, permissions, " +
+            "activities and services. Permissions show what the app is allowed to access, such as the internet or contacts. " +
+            "Labels show as @0x ids because the text is stored separately and is not decoded yet.")
     }
 
     val all: List<Feature> get() = list

@@ -316,6 +316,7 @@ class MainActivity : ComponentActivity() {
             Action.NATIVE_INFO -> background(next) { nativeInfo(target, current) }
             Action.NATIVE_ZIP_LIST -> background(next) { listArchive(target) }
             Action.NATIVE_EXTRACT_DEX -> background(next) { extractDex(target) }
+            Action.NATIVE_MANIFEST -> background(next) { decodeManifest(target) }
         }
     }
 
@@ -582,6 +583,26 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun decodeManifest(path: String) {
+        ZipFile(File(path)).use { zf ->
+            val entry = zf.getEntry("AndroidManifest.xml")
+            if (entry == null) {
+                say(Console.Style.WARN, "No AndroidManifest.xml in this file.")
+                return@use
+            }
+            if (entry.size > MAX_MANIFEST) {
+                say(Console.Style.WARN, "Manifest is too large to decode here (${entry.size} bytes).")
+                return@use
+            }
+            val bytes = zf.getInputStream(entry).use { it.readBytes() }
+            val xml = ManifestDecoder.decode(bytes)
+            ui {
+                write(Console.Style.HEADER, "AndroidManifest.xml (decoded)")
+                writeOutput(xml)
+            }
+        }
+    }
+
     private fun sha256(f: File): String {
         val md = MessageDigest.getInstance("SHA-256")
         f.inputStream().use { input ->
@@ -605,5 +626,6 @@ class MainActivity : ComponentActivity() {
         private val DEX_NAME = Regex("classes\\d*\\.dex")
         private const val MAX_OUTPUT = 200_000
         private const val TIMEOUT_SECONDS = 300L
+        private const val MAX_MANIFEST = 4_000_000L
     }
 }
