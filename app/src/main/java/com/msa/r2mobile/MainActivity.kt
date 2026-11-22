@@ -918,7 +918,7 @@ class MainActivity : ComponentActivity() {
                 val out = File(dir, "r2-log-${System.currentTimeMillis()}.txt")
                 out.writeText(text)
                 say(Console.Style.OK, "saved: ${out.name}")
-                say(Console.Style.INFO, "find it in Files > Download > R2Mobile")
+                say(Console.Style.INFO, "find it in Files > Download > msar2")
                 advice("open the file with any text viewer to copy or share it.")
             } catch (e: Exception) {
                 say(Console.Style.ERROR, "could not save: ${e.message}")
@@ -1510,6 +1510,7 @@ class MainActivity : ComponentActivity() {
         item("Decrypt a .r2enc file (24)") { numbered(24) },
         item("How to analyze and modify an APK (flow)") { showFlow() },
         item("Patch bytes, writes a copy (25)") { numbered(25) },
+        item("Open the save folder (Download/msar2)") { showSaveFolder() },
         item("Dual-pane file manager") { fileManagerResult.launch(Intent(this, FileManagerActivity::class.java)) },
     )
 
@@ -1653,8 +1654,35 @@ class MainActivity : ComponentActivity() {
     /** Folder for every output file (encrypted, decrypted, patched). Shown to the user after each save. */
     private fun outputDir(): File = getExternalFilesDir(null) ?: filesDir
 
-    /** Results you must find yourself go to Download/R2Mobile. */
+    /** Results you must find yourself go to Download/msar2. */
     private fun resultDir(): File = PublicFolder.dir(this)
+
+    /** Creates Download/msar2 if needed, shows its full path and whether it can be written, then opens it in the file manager. */
+    private fun showSaveFolder() {
+        val dir = PublicFolder.dir(this)
+        val shared = PublicFolder.shared()
+        val isShared = dir.canonicalPath == shared.canonicalPath
+        val files = dir.listFiles()?.count { it.isFile } ?: 0
+        val report = buildString {
+            appendLine("Folder: ${dir.absolutePath}")
+            appendLine("Files inside: $files")
+            appendLine("Shared Download/msar2: ${if (isShared) "in use" else "NOT used"}")
+            appendLine("Can write: ${dir.canWrite()}")
+            append("All files access: ${if (PublicFolder.hasAllFiles()) "on" else "OFF"}")
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Save folder")
+            .setMessage(
+                report + if (isShared) "" else
+                    "\n\nResults are going to the app's private folder. Turn on All files access for R2 Mobile " +
+                        "(Settings > Apps > R2 Mobile > All files access), then open this again."
+            )
+            .setPositiveButton("Open in file manager") { _, _ ->
+                startActivity(Intent(this, FileManagerActivity::class.java).putExtra("start", dir.absolutePath))
+            }
+            .setNegativeButton("Close", null)
+            .show()
+    }
 
     private fun showGuide() {
         ui {
@@ -1693,7 +1721,7 @@ class MainActivity : ComponentActivity() {
                     FileCrypto.encrypt(File(target), out, pw)
                     say(Console.Style.OK, "[3/3] saved ${out.name} (${out.length()} bytes)")
                     say(Console.Style.INFO, "location: ${out.absolutePath}")
-                    say(Console.Style.INFO, "find it in Files > Download > R2Mobile (shared storage, so the file manager can open it)")
+                    say(Console.Style.INFO, "find it in Files > Download > msar2 (shared storage, so the file manager can open it)")
                     advice("keep the password safe. Function 24 decrypts this file.")
                 } catch (e: Exception) {
                     out.delete()

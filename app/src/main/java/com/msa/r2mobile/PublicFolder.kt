@@ -7,16 +7,24 @@ import java.io.File
 
 /**
  * Where results you must find yourself are saved (encrypted files, patched copies, saved logs, projects):
- * Download/R2Mobile on shared storage, so the file manager and any other app can open them.
- * Falls back to the app's own folder only if shared storage is not writable.
+ * Download/msar2 on shared storage, so the file manager and any other app can open them.
+ * Falls back to the app's own folder only if shared storage cannot be created or written.
  */
 object PublicFolder {
-    const val DISPLAY_PATH = "Download/R2Mobile"
+    const val DISPLAY_PATH = "Download/msar2"
 
+    /** The shared msar2 folder, created if missing. Returns the app folder when that is not possible. */
     fun dir(context: Context): File {
-        val allowed = Build.VERSION.SDK_INT < Build.VERSION_CODES.R || Environment.isExternalStorageManager()
-        val shared = File(Environment.getExternalStorageDirectory(), DISPLAY_PATH)
-        if (allowed && (shared.isDirectory || shared.mkdirs()) && shared.canWrite()) return shared
+        val shared = shared()
+        if (shared.isDirectory || shared.mkdirs()) {
+            if (shared.canWrite()) return shared
+        }
         return context.getExternalFilesDir(null) ?: context.filesDir
     }
+
+    fun shared(): File = File(Environment.getExternalStorageDirectory(), DISPLAY_PATH)
+
+    /** True when the app has 'All files access' (always true before Android 11). */
+    fun hasAllFiles(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.R || Environment.isExternalStorageManager()
 }

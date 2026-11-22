@@ -198,8 +198,10 @@ class FileManagerActivity : Activity() {
         // Android 11 and later never lists /storage itself, even with all-files access. The whole
         // readable phone is the shared internal storage root, so both panes start and stay there.
         val phone = File("/storage/emulated/0")
-        left = Pane(phone, PHONE_LABEL, phone)
-        right = Pane(phone, PHONE_LABEL, phone)
+        // Opened from the console with a folder to show (for example the save folder), start there.
+        val wanted = intent.getStringExtra("start")?.let { File(it) }?.takeIf { it.isDirectory }
+        left = Pane(phone, PHONE_LABEL, wanted ?: phone)
+        right = Pane(phone, PHONE_LABEL, wanted ?: phone)
         active = left
         detector = ScaleGestureDetector(this, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
             override fun onScale(d: ScaleGestureDetector): Boolean {
@@ -240,7 +242,7 @@ class FileManagerActivity : Activity() {
 
     /**
      * Results from older builds sit in this app's private Android/data folder, which file managers cannot open.
-     * Copies any missing ones to Download/R2Mobile. Nothing is deleted.
+     * Copies any missing ones to Download/msar2. Nothing is deleted.
      */
     private fun copyAppResults() {
         val source = getExternalFilesDir(null) ?: return
