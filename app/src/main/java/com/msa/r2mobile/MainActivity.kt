@@ -1,6 +1,7 @@
 package com.msa.r2mobile
 
 import android.app.AlertDialog
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
@@ -85,6 +86,11 @@ class MainActivity : ComponentActivity() {
         if (uri == null) return@registerForActivityResult
         stopRunning(quiet = true)
         worker.execute { loadFile(uri) }
+    }
+
+    /** Returns from the file manager with the file the user chose to open in R2. */
+    private val fileManagerResult = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
+        res.data?.getStringExtra(FileManagerActivity.EXTRA_PATH)?.let { loadPath(it) }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -1082,6 +1088,22 @@ class MainActivity : ComponentActivity() {
         tabs.mapIndexed { i, t -> item((if (i == activeTab) "> " else "   ") + t.name) { switchTab(i) } } +
             listOf(item("+ Add a new tab") { addTab() })
 
+    /** Loads a file chosen in the file manager, the same way FILE > Open does. */
+    private fun loadPath(path: String) {
+        val f = File(path)
+        if (!f.isFile) {
+            say(Console.Style.WARN, "Not a file: $path")
+            return
+        }
+        targetPath = f.absolutePath
+        loadedName = f.name
+        val category = FileCategory.detect(f)
+        loaded = category
+        filter = category
+        say(Console.Style.OK, "loaded ${f.name} (${category.label})")
+        advice("tap FUNCTIONS to pick a step, or type a number in the box and press RUN.")
+    }
+
     // ---- DEX tools: regex, method and class filters, Java name translation ----
 
     private fun typeInBox(text: String) {
@@ -1163,6 +1185,7 @@ class MainActivity : ComponentActivity() {
         item("Encrypt the file with a password (23)") { numbered(23) },
         item("Decrypt a .r2enc file (24)") { numbered(24) },
         item("Patch bytes, writes a copy (25)") { numbered(25) },
+        item("Dual-pane file manager") { fileManagerResult.launch(Intent(this, FileManagerActivity::class.java)) },
     )
 
     private fun runMenu(): List<Pair<String, () -> Unit>> = listOf(
