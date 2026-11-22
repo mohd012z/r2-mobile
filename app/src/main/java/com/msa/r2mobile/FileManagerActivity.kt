@@ -156,8 +156,9 @@ class FileManagerActivity : Activity() {
 
             val p = ViewConfig.palette()
             val isActive = active === this@Pane
-            header.setBackgroundColor(if (isActive) 0xFF2979FF.toInt() else p.header)
-            header.setTextColor(if (isActive) Color.WHITE else p.text)
+            // Green pane headers: bright green for the active pane, dark green for the other.
+            header.setBackgroundColor(if (isActive) 0xFF2E9E4F.toInt() else 0xFF1B5E20.toInt())
+            header.setTextColor(Color.WHITE)
             list.setBackgroundColor(p.bg)
             header.text = if (results != null) {
                 "SEARCH in $topLabel: ${results.size} found   marked ${marked.size}"
@@ -193,6 +194,7 @@ class FileManagerActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         ViewConfig.load(this)
+        copyAppResults()
         // Android 11 and later never lists /storage itself, even with all-files access. The whole
         // readable phone is the shared internal storage root, so both panes start and stay there.
         val phone = File("/storage/emulated/0")
@@ -234,6 +236,29 @@ class FileManagerActivity : Activity() {
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
         detector.onTouchEvent(ev)
         return super.dispatchTouchEvent(ev)
+    }
+
+    /**
+     * Results from older builds sit in this app's private Android/data folder, which file managers cannot open.
+     * Copies any missing ones to Download/R2Mobile. Nothing is deleted.
+     */
+    private fun copyAppResults() {
+        val source = getExternalFilesDir(null) ?: return
+        val target = PublicFolder.dir(this)
+        if (source.canonicalPath == target.canonicalPath) return
+        val files = source.listFiles { f -> f.isFile && f.name.startsWith("msar2_") }.orEmpty()
+        var copied = 0
+        for (f in files) {
+            val dest = File(target, f.name)
+            if (dest.exists()) continue
+            try {
+                f.copyTo(dest)
+                copied++
+            } catch (e: Exception) {
+                // Leave the file where it is; the folder is still listed under Actions > Storage.
+            }
+        }
+        if (copied > 0) toast("copied $copied result file(s) to ${PublicFolder.DISPLAY_PATH}")
     }
 
     /** Storage places this phone shows: shared internal, app private, and any SD card. */
