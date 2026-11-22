@@ -85,7 +85,7 @@ class FileManagerActivity : Activity() {
                 when {
                     row == null -> goUp()
                     row.isDirectory && search == null -> go(row)
-                    else -> toggle(row)
+                    else -> showFileMenu(this@Pane, row)
                 }
             }
             setOnItemLongClickListener { _, _, pos, _ ->
@@ -342,6 +342,32 @@ class FileManagerActivity : Activity() {
         )
         AlertDialog.Builder(this)
             .setTitle("Actions")
+            .setItems(items.map { it.first }.toTypedArray()) { _, i -> items[i].second() }
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
+    /** Tapping a file marks it and opens its own menu: copy, move, share, extract, compress and more. */
+    private fun showFileMenu(p: Pane, f: File) {
+        active = p
+        p.marked.clear()
+        p.marked.add(f)
+        refreshBoth()
+        val items = mutableListOf<Pair<String, () -> Unit>>()
+        items += "Copy to other pane" to { transfer(move = false) }
+        items += "Move to other pane" to { transfer(move = true) }
+        if (clipboard.isNotEmpty()) items += "Paste here" to { paste(p.dir) }
+        items += "Share" to { share() }
+        if (Archive.isArchive(f.name)) items += "Extract here" to { unzipOne() }
+        items += "Compress (zip, tar.gz, gz)" to { zipMarked() }
+        items += "Rename" to { rename() }
+        items += "View (text or hex)" to { viewFile() }
+        if (f.isFile) items += "Encrypt (password)" to { encryptMarked() }
+        if (f.name.endsWith(".r2enc")) items += "Decrypt (password)" to { decryptMarked() }
+        items += "Open in R2 console" to { openInR2() }
+        items += "Delete" to { deleteMarked() }
+        AlertDialog.Builder(this)
+            .setTitle(f.name)
             .setItems(items.map { it.first }.toTypedArray()) { _, i -> items[i].second() }
             .setNegativeButton("Close", null)
             .show()
