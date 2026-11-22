@@ -357,6 +357,10 @@ class MainActivity : ComponentActivity() {
             lower == "functions" || lower == "f" -> showFunctionMenu()
             lower == "filter" -> showFilterMenu()
             lower == "only" || lower.startsWith("only ") -> onlyFilter(text.substring(4).trim())
+            lower.startsWith("regex ") -> regexFilter(text.substring(6).trim())
+            lower.startsWith("method ") -> containsFilter("method", text.substring(7).trim())
+            lower.startsWith("class ") -> containsFilter("class", text.substring(6).trim())
+            lower == "translate" -> translateLast()
             lower.startsWith("range ") -> rangeFilter(text.substring(6).trim())
             lower == "save" -> saveLog()
             lower.startsWith("find ") -> {
@@ -1078,6 +1082,65 @@ class MainActivity : ComponentActivity() {
         tabs.mapIndexed { i, t -> item((if (i == activeTab) "> " else "   ") + t.name) { switchTab(i) } } +
             listOf(item("+ Add a new tab") { addTab() })
 
+    // ---- DEX tools: regex, method and class filters, Java name translation ----
+
+    private fun typeInBox(text: String) {
+        cmdInput.setText(text)
+        cmdInput.setSelection(cmdInput.text.length)
+        cmdInput.requestFocus()
+    }
+
+    /** Keeps the lines of the last output that match a regular expression (case-insensitive). */
+    private fun regexFilter(pattern: String) {
+        if (pattern.isEmpty()) {
+            say(Console.Style.WARN, "Use: regex PATTERN, e.g.  regex Ljava/net/.*")
+            advice("type  regex  then your pattern. It is checked against each line of the last output.")
+            return
+        }
+        val rx = try {
+            Regex(pattern, RegexOption.IGNORE_CASE)
+        } catch (e: Exception) {
+            say(Console.Style.WARN, "Not a valid pattern: ${e.message?.lineSequence()?.firstOrNull() ?: pattern}")
+            advice("examples:  regex Lcom/.*  or  regex (?i)password  or  regex invoke-.*")
+            return
+        }
+        filterLast("regex '$pattern'") { rx.containsMatchIn(it) }
+    }
+
+    /** Keeps the lines that contain a method or class name, ignoring case. */
+    private fun containsFilter(kind: String, name: String) {
+        if (name.isEmpty()) {
+            say(Console.Style.WARN, "Use: $kind NAME, e.g.  $kind onCreate")
+            advice("type  $kind  then the name to look for.")
+            return
+        }
+        filterLast("$kind '$name'") { it.contains(name, ignoreCase = true) }
+    }
+
+    /** Replaces smali class descriptors (Ljava/lang/String;) with Java names (java.lang.String) in the last output. */
+    private fun translateLast() {
+        val file = lastOutput
+        if (file == null || !file.exists() || file.length() == 0L) {
+            say(Console.Style.WARN, "No output to translate yet. Run a command first.")
+            advice("run  ic  or  afl  first, then type  translate.")
+            return
+        }
+        val rx = Regex("L[A-Za-z0-9_\\$/]+;")
+        var total = 0
+        val picked = ArrayList<String>()
+        file.useLines { seq ->
+            seq.forEach { line ->
+                total++
+                if (picked.size < MAX_PICK) {
+                    picked += rx.replace(line) { m ->
+                        try { Converter.smaliToJava(m.value) } catch (e: Exception) { m.value }
+                    }
+                }
+            }
+        }
+        showFiltered(picked, total, "translated to Java names")
+    }
+
     // ---- dropdown categories ----------------------------------------------
 
     /** Opens a list of actions under [anchor]. Each label runs its action when chosen. */
@@ -1117,6 +1180,11 @@ class MainActivity : ComponentActivity() {
             cmdInput.setSelection(cmdInput.text.length)
             cmdInput.requestFocus()
         },
+        item("DEX: list classes (ic)") { runR2("ic", "type  regex Lcom/  or  class NAME  to narrow the list.") },
+        item("DEX: filter by method name") { typeInBox("method ") },
+        item("DEX: filter by class name") { typeInBox("class ") },
+        item("DEX: filter by regex") { typeInBox("regex ") },
+        item("DEX: translate smali names to Java") { translateLast() },
         item("NEXT step: what should I do now?") { nextStep() },
         item("Step-by-step patching guide") { showGuide() },
         item("radare2 reference with examples (28)") { showReference() },
