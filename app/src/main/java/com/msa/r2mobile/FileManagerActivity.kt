@@ -39,6 +39,8 @@ import java.util.concurrent.Executors
 class FileManagerActivity : Activity() {
 
     companion object {
+        /** Name of the pane root: the shared internal storage, every folder Android lets the app see. */
+        const val PHONE_LABEL = "Phone storage (internal, all folders)"
         const val EXTRA_PATH = "path"
         private const val MAX_SEARCH = 5_000
     }
@@ -142,12 +144,7 @@ class FileManagerActivity : Activity() {
             rows = if (results != null) {
                 results
             } else {
-                // /storage itself is hidden by Android, so it shows the storage places instead.
-                val raw: List<File> = if (isPhoneRoot(dir)) {
-                    storages().map { it.dir }.distinctBy { it.path }.filter { !isPhoneRoot(it) }
-                } else {
-                    dir.listFiles()?.toList() ?: emptyList()
-                }
+                val raw: List<File> = dir.listFiles()?.toList() ?: emptyList()
                 val kids = raw
                     .filter { ViewConfig.showHidden || !it.name.startsWith(".") }
                     .sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() }))
@@ -166,7 +163,7 @@ class FileManagerActivity : Activity() {
                 "SEARCH in $topLabel: ${results.size} found   marked ${marked.size}"
             } else {
                 val rel = dir.absolutePath.removePrefix(top.absolutePath).ifEmpty { "/" }
-                val blocked = if (dir.canRead() || isPhoneRoot(dir)) "" else "   (Android blocks this folder)"
+                val blocked = if (dir.canRead()) "" else "   (Android blocks this folder)"
                 "$topLabel  $rel$blocked   marked ${marked.size}"
             }
         }
@@ -176,7 +173,6 @@ class FileManagerActivity : Activity() {
             val mark = if (f in marked) "✔ " else ""
             val name = when {
                 searching -> f.absolutePath.removePrefix(top.absolutePath + File.separator)
-                isPhoneRoot(dir) -> storages().firstOrNull { it.dir.path == f.path }?.label ?: f.name
                 else -> f.name
             }
             return if (f.isDirectory) "$mark$name" else "$mark$name   ${humanSize(f.length())}"
@@ -197,12 +193,11 @@ class FileManagerActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         ViewConfig.load(this)
-        // The whole phone is /storage. Start in the shared internal storage root; the path is
-        // used even if Android hides it, so the pane shows the permission banner instead of an empty place.
-        val phone = File("/storage")
-        val start = File("/storage/emulated/0")
-        left = Pane(phone, "Phone storage", start)
-        right = Pane(phone, "Phone storage", start)
+        // Android 11 and later never lists /storage itself, even with all-files access. The whole
+        // readable phone is the shared internal storage root, so both panes start and stay there.
+        val phone = File("/storage/emulated/0")
+        left = Pane(phone, PHONE_LABEL, phone)
+        right = Pane(phone, PHONE_LABEL, phone)
         active = left
         detector = ScaleGestureDetector(this, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
             override fun onScale(d: ScaleGestureDetector): Boolean {
@@ -244,9 +239,8 @@ class FileManagerActivity : Activity() {
     /** Storage places this phone shows: shared internal, app private, and any SD card. */
     private fun storages(): List<Storage> {
         val list = mutableListOf<Storage>()
-        File("/storage").takeIf { it.isDirectory }?.let { list += Storage("Phone storage (all, unrooted)", it) }
         val shared = File("/storage/emulated/0")
-        if (shared.isDirectory) list += Storage("Internal storage (phone shared)", shared)
+        if (shared.isDirectory) list += Storage(PHONE_LABEL, shared)
         list += Storage("App private folder", filesDir)
         getExternalFilesDir(null)?.let { list += Storage("App folder on shared storage", it) }
         File("/storage").listFiles()
@@ -273,8 +267,6 @@ class FileManagerActivity : Activity() {
             .setNegativeButton("Close", null)
             .show()
     }
-
-    private fun isPhoneRoot(f: File): Boolean = f.path == "/storage"
 
     private fun hasAllFilesAccess(): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.R || Environment.isExternalStorageManager()
