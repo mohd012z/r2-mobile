@@ -88,6 +88,17 @@ class MainActivity : ComponentActivity() {
         worker.execute { loadFile(uri) }
     }
 
+    override fun onResume() {
+        super.onResume()
+        applyView()
+    }
+
+    /** Applies the View settings: console text size and button text size. */
+    private fun applyView() {
+        outputText.textSize = ViewConfig.consoleText
+        ViewConfig.applyButtons(window.decorView)
+    }
+
     /** Returns from the file manager with the file the user chose to open in R2. */
     private val fileManagerResult = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
         res.data?.getStringExtra(FileManagerActivity.EXTRA_PATH)?.let { loadPath(it) }
@@ -96,6 +107,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        ViewConfig.load(this)
 
         outputText = findViewById(R.id.outputText)
         scrollView = findViewById(R.id.scrollView)
@@ -1214,6 +1226,7 @@ class MainActivity : ComponentActivity() {
     )
 
     private fun viewMenu(): List<Pair<String, () -> Unit>> = listOf(
+        item("View settings: text size, hidden files, pane layout") { ViewConfig.dialog(this@MainActivity) { applyView() } },
         item(if (editMode) "Mode: EDIT is on. Tap for READ" else "Mode: READ is on. Tap for EDIT") { toggleEdit() },
         item("Scroll to the top") { scrollView.fullScroll(ScrollView.FOCUS_UP) },
         item("Scroll to the bottom") { scrollView.fullScroll(ScrollView.FOCUS_DOWN) },

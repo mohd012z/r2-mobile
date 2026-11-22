@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Folders the file manager may share through FileProvider. -->
+<paths>
+    <files-path name="app_files" path="." />
+    <external-files-path name="app_external" path="." />
+    <external-path name="storage" path="." />
+</paths>
