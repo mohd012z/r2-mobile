@@ -188,8 +188,10 @@ class FileManagerActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         ViewConfig.load(this)
-        val phone = storages().first().dir
-        val start = File("/storage/emulated/0").takeIf { it.isDirectory } ?: phone
+        // The whole phone is /storage. Start in the shared internal storage root; the path is
+        // used even if Android hides it, so the pane shows the permission banner instead of an empty place.
+        val phone = File("/storage")
+        val start = File("/storage/emulated/0")
         left = Pane(phone, "Phone storage", start)
         right = Pane(phone, "Phone storage", start)
         active = left
@@ -211,6 +213,12 @@ class FileManagerActivity : Activity() {
         setContentView(root)
         buildLayout()
         if (!hasAllFilesAccess()) askAllFilesAccess()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Coming back from the settings page: rebuild so the banner and the lists match the permission now.
+        if (::root.isInitialized) buildLayout()
     }
 
     override fun onDestroy() {
@@ -301,6 +309,20 @@ class FileManagerActivity : Activity() {
         panes.addView(left.root, paneParams)
         panes.addView(divider, dividerParams)
         panes.addView(right.root, paneParams)
+        if (!hasAllFilesAccess()) {
+            root.addView(TextView(this).apply {
+                text = "ALL FILES ACCESS IS OFF, so Android shows an empty phone. Tap here, then switch on " +
+                    "'Allow access to all files' for R2 Mobile."
+                textSize = 14f
+                setTypeface(null, Typeface.BOLD)
+                setTextColor(Color.BLACK)
+                setBackgroundColor(0xFFFFD600.toInt())
+                setPadding(20, 18, 20, 18)
+                setOnClickListener { askAllFilesAccess() }
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                bottomMargin = dp(6)
+            })
+        }
         root.addView(panes, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
         root.addView(buttonRow(
             "Copy >" to { transfer(move = false) },
