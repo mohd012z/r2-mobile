@@ -1,7 +1,10 @@
 package com.msa.r2mobile
 
 /** How a feature runs: through radare2, or natively in the app. */
-enum class Action { R2, NATIVE_INFO, NATIVE_ZIP_LIST, NATIVE_EXTRACT_DEX, NATIVE_MANIFEST }
+enum class Action {
+    R2, NATIVE_INFO, NATIVE_ZIP_LIST, NATIVE_EXTRACT_DEX, NATIVE_MANIFEST,
+    NATIVE_ENCRYPT, NATIVE_DECRYPT, NATIVE_PATCH, GUIDE,
+}
 
 /**
  * One numbered function. [number] is what the user types or taps.
@@ -93,6 +96,18 @@ object Catalog {
             "Turns the app's binary manifest into readable XML: package name, version, permissions, " +
             "activities and services. Permissions show what the app is allowed to access, such as the internet or contacts. " +
             "Labels show as @0x ids because the text is stored separately and is not decoded yet.")
+        add("Edit", "Encrypt the file with a password", Action.NATIVE_ENCRYPT, "", EVERYTHING,
+            "Locks the loaded file with AES-256 and a password you choose. The result is saved as NAME.r2enc " +
+            "in your app folder. Without the password the file cannot be opened again, and the app does not store it.")
+        add("Edit", "Decrypt a .r2enc file", Action.NATIVE_DECRYPT, "", EVERYTHING,
+            "Unlocks a file made by function 23 with the same password. The decrypted copy is saved and loaded " +
+            "as the target, so the other functions work on it.")
+        add("Edit", "Patch bytes at an offset (writes a copy)", Action.NATIVE_PATCH, "", EVERYTHING,
+            "Replaces bytes at an offset with new bytes. The result is a patched COPY (NAME-patched.EXT); the " +
+            "original is not changed. Find the offset with  s ADDRESS;px 32. Example: 1f 20 03 d5 is a NOP on ARM64.")
+        add("Guide", "Step-by-step patching guide (read first)", Action.GUIDE, "", EVERYTHING,
+            "Explains the whole flow: find the code, look at the bytes, patch a copy, check the result, and what " +
+            "this app can and cannot repack. Works without a file loaded.")
     }
 
     val all: List<Feature> get() = list

@@ -6,11 +6,13 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.OpenableColumns
+import android.text.InputType
 import android.text.method.LinkMovementMethod
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.widget.Button
 import android.widget.EditText
+import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
@@ -301,6 +303,10 @@ class MainActivity : ComponentActivity() {
     // ---- running -----------------------------------------------------------
 
     private fun executeFeature(feature: Feature) {
+        if (feature.action == Action.GUIDE) {
+            showGuide()
+            return
+        }
         val current = loaded
         val target = targetPath
         if (current == null || target == null) {
@@ -321,6 +327,10 @@ class MainActivity : ComponentActivity() {
             Action.NATIVE_ZIP_LIST -> background(next) { listArchive(target) }
             Action.NATIVE_EXTRACT_DEX -> background(next) { extractDex(target) }
             Action.NATIVE_MANIFEST -> background(next) { decodeManifest(target) }
+            Action.NATIVE_ENCRYPT -> encryptLoaded(target, loadedName ?: "file")
+            Action.NATIVE_DECRYPT -> decryptLoaded(target, loadedName ?: "file")
+            Action.NATIVE_PATCH -> askPatch(target, loadedName ?: "file")
+            Action.GUIDE -> showGuide()
         }
     }
 
@@ -619,6 +629,146 @@ class MainActivity : ComponentActivity() {
             ui {
                 write(Console.Style.HEADER, "AndroidManifest.xml (decoded)")
                 writeOutput(xml)
+            }
+        }
+    }
+
+    // ---- encryption, patching and the guide -------------------------------
+
+    /** Folder for every output file (encrypted, decrypted, patched). Shown to the user after each save. */
+    private fun outputDir(): File = getExternalFilesDir(null) ?: filesDir
+
+    private fun showGuide() {
+        ui {
+            write(Console.Style.HEADER, "Patching guide")
+            writeOutput(Guide.PATCHING)
+        }
+        advice("tap FUNCTIONS and pick 25 to patch a copy, or 23 to encrypt the file first.")
+    }
+
+    private fun askPassword(title: String, onOk: (CharArray) -> Unit) {
+        val input = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            hint = "password"
+        }
+        AlertDialog.Builder(this)
+            .setTitle(title)
+            .setMessage("Remember this password. Without it the file cannot be opened again.")
+            .setView(input)
+            .setPositiveButton("OK") { _, _ -> onOk(input.text.toString().toCharArray()) }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun encryptLoaded(target: String, name: String) {
+        askPassword("Encrypt $name") { pw ->
+            if (pw.isEmpty()) {
+                say(Console.Style.WARN, "No password typed. Nothing was encrypted.")
+                advice("tap 23 again and type a password.")
+                return@askPassword
+            }
+            worker.execute {
+                val out = File(outputDir(), "$name.r2enc")
+                try {
+                    say(Console.Style.INFO, "[1/3] reading ${File(target).length()} bytes")
+                    say(Console.Style.INFO, "[2/3] deriving key (100000 rounds) and encrypting")
+                    FileCrypto.encrypt(File(target), out, pw)
+                    say(Console.Style.OK, "[3/3] saved ${out.name} (${out.length()} bytes)")
+                    say(Console.Style.INFO, "location: ${out.absolutePath}")
+                    say(Console.Style.INFO, "find it in Files > Android > data > com.msa.r2mobile > files")
+                    advice("keep the password safe. Function 24 decrypts this file.")
+                } catch (e: Exception) {
+                    out.delete()
+                    say(Console.Style.ERROR, "encrypt failed: ${e.message}")
+                    advice(Advice.FAILED)
+                }
+            }
+        }
+    }
+
+    private fun decryptLoaded(target: String, name: String) {
+        askPassword("Decrypt $name") { pw ->
+            if (pw.isEmpty()) {
+                say(Console.Style.WARN, "No password typed. Nothing was decrypted.")
+                advice("tap 24 again and type the password.")
+                return@askPassword
+            }
+            worker.execute {
+                val out = File(outputDir(), name.removeSuffix(".r2enc") + ".decrypted")
+                try {
+                    say(Console.Style.INFO, "[1/3] reading ${File(target).length()} bytes")
+                    say(Console.Style.INFO, "[2/3] deriving key and decrypting")
+                    FileCrypto.decrypt(File(target), out, pw)
+                    targetPath = out.absolutePath
+                    loadedName = out.name
+                    val category = FileCategory.detect(out)
+                    loaded = category
+                    filter = category
+                    say(Console.Style.OK, "[3/3] decrypted to ${out.name} (${out.length()} bytes), now the target")
+                    say(Console.Style.INFO, "location: ${out.absolutePath}")
+                    advice("the decrypted file is loaded. Run 1 for its info.")
+                } catch (e: Exception) {
+                    out.delete()
+                    say(Console.Style.ERROR, "decrypt failed: wrong password, or not an R2 encrypted file (${e.message})")
+                    advice("check the password, or make sure the loaded file came from function 23.")
+                }
+            }
+        }
+    }
+
+    private fun askPatch(target: String, name: String) {
+        val offsetBox = EditText(this).apply {
+            hint = "offset in hex, e.g. 0x1a40"
+            inputType = InputType.TYPE_CLASS_TEXT
+        }
+        val bytesBox = EditText(this).apply {
+            hint = "new bytes in hex, e.g. 1f 20 03 d5"
+            inputType = InputType.TYPE_CLASS_TEXT
+        }
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(48, 16, 48, 0)
+            addView(offsetBox)
+            addView(bytesBox)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Patch $name")
+            .setMessage("Writes the new bytes into a COPY. Your original is not changed. See 26 for the steps.")
+            .setView(box)
+            .setPositiveButton("Patch") { _, _ ->
+                patchLoaded(target, name, offsetBox.text.toString(), bytesBox.text.toString())
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun patchLoaded(target: String, name: String, offsetText: String, bytesText: String) {
+        worker.execute {
+            try {
+                val offset = BytePatch.parseOffset(offsetText)
+                val newBytes = BytePatch.parseHex(bytesText)
+                val stem = name.substringBeforeLast('.', name)
+                val ext = if (name.contains('.')) name.substringAfterLast('.') else "bin"
+                val out = File(outputDir(), "$stem-patched.$ext")
+                say(Console.Style.INFO, "[1/3] copying ${File(target).length()} bytes")
+                say(Console.Style.INFO, "[2/3] writing ${newBytes.size} bytes at 0x${"%x".format(offset)}")
+                val before = BytePatch.patch(File(target), out, offset, newBytes)
+                targetPath = out.absolutePath
+                loadedName = out.name
+                val category = FileCategory.detect(out)
+                loaded = category
+                filter = category
+                say(Console.Style.OK, "[3/3] patched copy saved: ${out.name}")
+                say(Console.Style.INFO, "before: ${BytePatch.hex(before)}")
+                say(Console.Style.INFO, "after:  ${BytePatch.hex(newBytes)}")
+                say(Console.Style.INFO, "location: ${out.absolutePath}")
+                if (category == FileCategory.APK) {
+                    say(Console.Style.WARN, "APK: this copy is unsigned. Android will not install it until it is re-signed.")
+                }
+                advice("check the result with  s 0x${"%x".format(offset)};px 16  Then patch again or export.")
+            } catch (e: Exception) {
+                say(Console.Style.ERROR, "patch failed: ${e.message}")
+                advice("check the offset and bytes, e.g. offset 0x1a40 and bytes 1f 20 03 d5.")
             }
         }
     }
