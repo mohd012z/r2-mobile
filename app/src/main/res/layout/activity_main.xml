@@ -38,6 +38,12 @@
         </HorizontalScrollView>
     </ScrollView>
 
+    <LinearLayout
+        android:id="@+id/controlsPanel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
     <ProgressBar
         android:id="@+id/progressBar"
         style="?android:attr/progressBarStyleHorizontal"
@@ -96,6 +102,15 @@
         android:orientation="horizontal">
 
         <Button
+            android:id="@+id/fullscreenButton"
+            style="@style/CompactButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingLeft="10dp"
+            android:paddingRight="10dp"
+            android:text="FULL" />
+
+        <Button
             android:id="@+id/fileMenuButton"
             style="@style/CompactButton"
             android:layout_width="0dp"
@@ -126,6 +141,8 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="VIEW ▼" />
+    </LinearLayout>
+
     </LinearLayout>
 
 </LinearLayout>

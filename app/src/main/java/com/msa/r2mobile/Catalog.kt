@@ -3,7 +3,7 @@ package com.msa.r2mobile
 /** How a feature runs: through radare2, or natively in the app. */
 enum class Action {
     R2, NATIVE_INFO, NATIVE_ZIP_LIST, NATIVE_EXTRACT_DEX, NATIVE_MANIFEST,
-    NATIVE_ENCRYPT, NATIVE_DECRYPT, NATIVE_PATCH, GUIDE, R2_BLOCKS, R2_REFERENCE,
+    NATIVE_ENCRYPT, NATIVE_DECRYPT, NATIVE_PATCH, GUIDE, R2_BLOCKS, R2_REFERENCE, TROUBLESHOOT,
 }
 
 /**
@@ -114,6 +114,9 @@ object Catalog {
         add("Guide", "radare2 reference: commands, examples, how to read", Action.R2_REFERENCE, "", EVERYTHING,
             "Explains every command this app uses, with an example and what the output means. Read it once " +
             "before the other functions. Works without a file loaded.")
+        add("Help", "Troubleshoot: check the engine, file and storage", Action.TROUBLESHOOT, "", EVERYTHING,
+            "Runs a checklist: is the radare2 engine in the app, does it start, is a file loaded, can radare2 read it, " +
+            "is there free storage. Each failed check says what to do. Use it when a function does not work.")
     }
 
     val all: List<Feature> get() = list

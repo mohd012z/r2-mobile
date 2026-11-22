@@ -7,7 +7,10 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.OpenableColumns
 import android.text.InputType
+import android.content.res.ColorStateList
+import android.graphics.Color
 import android.util.TypedValue
+import java.util.concurrent.TimeUnit
 import android.view.ScaleGestureDetector
 import android.text.method.LinkMovementMethod
 import android.view.View
@@ -89,12 +92,27 @@ class MainActivity : ComponentActivity() {
         statusText = findViewById(R.id.statusText)
         outputText.movementMethod = LinkMovementMethod.getInstance()
 
-        // Pinch with two fingers on the console to make the text bigger or smaller.
+        // Pinch with two fingers to change the text size. The size is applied at most about
+        // 12 times a second: every change re-lays out the whole console, so applying it on
+        // every touch event is what made the zoom lag.
         val density = resources.displayMetrics.scaledDensity
+        var pendingPx = -1f
+        var zoomScheduled = false
+        val applyZoom = Runnable {
+            zoomScheduled = false
+            if (pendingPx > 0f) {
+                outputText.setTextSize(TypedValue.COMPLEX_UNIT_PX, pendingPx)
+                pendingPx = -1f
+            }
+        }
         val zoom = ScaleGestureDetector(this, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
             override fun onScale(detector: ScaleGestureDetector): Boolean {
-                val px = (outputText.textSize * detector.scaleFactor).coerceIn(8f * density, 40f * density)
-                outputText.setTextSize(TypedValue.COMPLEX_UNIT_PX, px)
+                val base = if (pendingPx > 0f) pendingPx else outputText.textSize
+                pendingPx = (base * detector.scaleFactor).coerceIn(8f * density, 40f * density)
+                if (!zoomScheduled) {
+                    zoomScheduled = true
+                    handler.postDelayed(applyZoom, 80)
+                }
                 return true
             }
         })
@@ -105,6 +123,8 @@ class MainActivity : ComponentActivity() {
 
         findViewById<Button>(R.id.runButton).setOnClickListener { runTyped() }
         findViewById<Button>(R.id.functionsPickButton).setOnClickListener { showFunctionMenu() }
+        findViewById<Button>(R.id.fullscreenButton).setOnClickListener { toggleFullscreen() }
+        colourButtons()
         findViewById<Button>(R.id.fileMenuButton).setOnClickListener { dropdown(it, fileMenu()) }
         findViewById<Button>(R.id.runMenuButton).setOnClickListener { dropdown(it, runMenu()) }
         findViewById<Button>(R.id.findMenuButton).setOnClickListener { dropdown(it, findMenu()) }
@@ -363,6 +383,10 @@ class MainActivity : ComponentActivity() {
             showReference()
             return
         }
+        if (feature.action == Action.TROUBLESHOOT) {
+            troubleshoot()
+            return
+        }
         val current = loaded
         val target = targetPath
         if (current == null || target == null) {
@@ -389,6 +413,7 @@ class MainActivity : ComponentActivity() {
             Action.GUIDE -> showGuide()
             Action.R2_BLOCKS -> runBlocks(next)
             Action.R2_REFERENCE -> showReference()
+            Action.TROUBLESHOOT -> troubleshoot()
         }
     }
 
@@ -775,6 +800,115 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // ---- colours and fullscreen -----------------------------------------------
+
+    /** Each category has its own colour, so the buttons are easy to tell apart. */
+    private fun colourButtons() {
+        val colours = mapOf(
+            R.id.fileMenuButton to "#2979FF",       // FILE: blue
+            R.id.runButton to "#00C853",            // RUN: green
+            R.id.functionsPickButton to "#00B8D4",  // FUNCTIONS: cyan
+            R.id.runMenuButton to "#00C853",        // RUN menu: green
+            R.id.findMenuButton to "#FF9100",       // FIND: orange
+            R.id.viewMenuButton to "#AA00FF",       // VIEW: purple
+            R.id.fullscreenButton to "#607D8B",     // FULL: slate
+        )
+        for ((id, hex) in colours) {
+            findViewById<Button>(id).apply {
+                backgroundTintList = ColorStateList.valueOf(Color.parseColor(hex))
+                setTextColor(Color.WHITE)
+            }
+        }
+    }
+
+    private var fullscreen = false
+
+    /** Hides the controls and the system bars so the console fills the screen. Back leaves it. */
+    private fun toggleFullscreen() {
+        fullscreen = !fullscreen
+        findViewById<View>(R.id.controlsPanel).visibility = if (fullscreen) View.GONE else View.VISIBLE
+        window.decorView.systemUiVisibility = if (fullscreen) {
+            View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+        } else {
+            View.SYSTEM_UI_FLAG_VISIBLE
+        }
+        if (fullscreen) say(Console.Style.INFO, "fullscreen on. Press BACK to show the controls again.")
+    }
+
+    @Suppress("DEPRECATION")
+    override fun onBackPressed() {
+        if (fullscreen) {
+            toggleFullscreen()
+        } else {
+            super.onBackPressed()
+        }
+    }
+
+    // ---- troubleshooting -----------------------------------------------------
+
+    /** Runs a short command and returns its output, or null if it fails or takes over a minute. */
+    private fun quickRun(vararg args: String): String? {
+        return try {
+            val process = ProcessBuilder(*args).redirectErrorStream(true).directory(filesDir)
+                .apply { environment()["HOME"] = filesDir.absolutePath }
+                .start()
+            val text = process.inputStream.bufferedReader().use { it.readText() }
+            if (!process.waitFor(60, TimeUnit.SECONDS)) {
+                process.destroy()
+                null
+            } else if (process.exitValue() == 0) {
+                text
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /** Checks the engine, the file, the analysis and the storage, and says what to do for each failure. */
+    private fun troubleshoot() {
+        worker.execute {
+            say(Console.Style.HEADER, "Troubleshooting: checking the tool, the file and storage")
+            val checks = mutableListOf<Triple<String, Boolean, String>>()
+            val engineOk = r2Binary.exists()
+            checks += Triple("radare2 engine is in this build", engineOk,
+                "the APK was built without the engine. Rebuild it with GitHub Actions.")
+            val version = if (engineOk) quickRun(r2Binary.absolutePath, "-v") else null
+            val versionLine = version?.lineSequence()?.firstOrNull()?.trim()?.take(50)
+            checks += Triple("radare2 engine starts (${versionLine ?: "no answer"})", version != null,
+                "the engine did not start on this phone. Check the Android version and rebuild the APK.")
+            val file = targetPath?.let { File(it) }
+            val fileOk = file != null && file.exists() && file.length() > 0
+            checks += Triple("a file is loaded (${loadedName ?: "none"})", fileOk,
+                "tap OPEN and pick a file. Then run troubleshooting again.")
+            if (engineOk && fileOk) {
+                val info = quickRun(r2Binary.absolutePath, "-N", "-qc", "i", file!!.absolutePath) ?: ""
+                val readable = info.contains("arch")
+                checks += Triple("radare2 can read this file format", readable,
+                    "radare2 does not know this format. For an APK use 20 and 21; for other files use 2 and 9.")
+            }
+            val storageOk = outputDir().canWrite() && outputDir().usableSpace > 50L * 1024 * 1024
+            checks += Triple("output folder is writable with 50 MB free", storageOk,
+                "free some phone storage. Outputs are saved in Android > data > com.msa.r2mobile > files.")
+            val lastOk = lastOutput?.exists() == true
+            checks += Triple("last command output was saved", lastOk,
+                "no output yet. Run a command first, for example 1 or i.")
+
+            val failed = checks.filter { !it.second }
+            checks.forEach { (name, ok, _) ->
+                say(if (ok) Console.Style.OK else Console.Style.ERROR, "${if (ok) "PASS" else "FAIL"}  $name")
+            }
+            if (failed.isEmpty()) {
+                advice("all checks passed. If one function still fails, read its message, then type 'help'.")
+            } else {
+                say(Console.Style.WARN, "${failed.size} check(s) failed. Fix the first one:")
+                advice(failed.first().third)
+            }
+        }
+    }
+
     // ---- converters ---------------------------------------------------------
 
     private fun convert(args: String) {
@@ -876,6 +1010,9 @@ class MainActivity : ComponentActivity() {
             val text = StringBuilder()
             text.append("function ${fn.optString("name", "entry0")}: ${blocks.length()} blocks\n")
             text.append("Each block is a run of instructions with no jumps inside it.\n\n")
+            var loops = 0
+            var branches = 0
+            var returns = 0
             for (i in 0 until blocks.length()) {
                 val b = blocks.getJSONObject(i)
                 val addr = b.getLong("addr")
@@ -884,15 +1021,22 @@ class MainActivity : ComponentActivity() {
                 text.append("BLOCK ${"0x%08x".format(addr)}  (${b.optLong("size")} bytes)\n")
                 if (jump >= 0) {
                     val kind = if (jump <= addr) "loop back" else "forward"
+                    if (jump <= addr) loops++ else branches++
                     text.append("   if true  -> ${"0x%08x".format(jump)}  $kind\n")
                 }
                 if (fail >= 0) {
                     val kind = if (fail <= addr) "loop back" else "forward"
+                    if (fail <= addr) loops++ else branches++
                     text.append("   if false -> ${"0x%08x".format(fail)}  $kind\n")
                 }
-                if (jump < 0 && fail < 0) text.append("   ends the function (return)\n")
+                if (jump < 0 && fail < 0) {
+                    text.append("   ends the function (return)\n")
+                    returns++
+                }
                 text.append("\n")
             }
+            text.append("SUMMARY: $loops loop edge(s), $branches forward branch(es), $returns return block(s).\n")
+            text.append("A 'loop back' edge means the code jumps to an earlier block and repeats.\n")
             ui {
                 write(Console.Style.HEADER, "Block diagram of the code flow")
                 writeOutput(text.toString()) { tapAddress(it) }
