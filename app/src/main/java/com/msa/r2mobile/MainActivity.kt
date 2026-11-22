@@ -50,7 +50,7 @@ class MainActivity : ComponentActivity() {
     /** What the running command is doing right now, shown on the status line. */
     @Volatile private var phase = ""
     /** Text of the last radare2 run, kept so the output filters can reuse it. */
-    @Volatile private var lastOutput: String? = null
+    @Volatile private var lastOutput: File? = null
 
     /** Updates the elapsed-time line once a second while a command runs. */
     private val ticker: Runnable = object : Runnable {
@@ -162,8 +162,9 @@ class MainActivity : ComponentActivity() {
         try {
             val name = displayName(uri)
             val dest = File(cacheDir, "target.bin")
+            val total = contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length } ?: -1L
             contentResolver.openInputStream(uri)?.use { input ->
-                dest.outputStream().use { input.copyTo(it) }
+                dest.outputStream().use { copyWithProgress(input, it, total) }
             } ?: throw IllegalStateException("cannot open the selected file")
             val category = FileCategory.detect(dest)
             targetPath = dest.absolutePath
@@ -176,6 +177,36 @@ class MainActivity : ComponentActivity() {
         } catch (e: Exception) {
             say(Console.Style.ERROR, "load error: ${e.message}")
             advice("try OPEN again. Very large files need free memory on the phone.")
+        }
+    }
+
+    /** Copies the picked file. Shows a real percentage on the progress bar when the size is known. */
+    private fun copyWithProgress(input: InputStream, out: java.io.OutputStream, total: Long) {
+        val buf = ByteArray(65_536)
+        var done = 0L
+        runOnUiThread {
+            progressBar.visibility = View.VISIBLE
+            progressBar.isIndeterminate = total <= 0
+            progressBar.max = 100
+            progressBar.progress = 0
+        }
+        while (true) {
+            val n = input.read(buf)
+            if (n < 0) break
+            out.write(buf, 0, n)
+            done += n
+            if (total > 0) {
+                val pct = (done * 100 / total).toInt()
+                runOnUiThread {
+                    progressBar.progress = pct
+                    statusText.text = "Copying the file: $pct% (${done / 1024} of ${total / 1024} KB)"
+                }
+            }
+        }
+        runOnUiThread {
+            progressBar.visibility = View.GONE
+            progressBar.isIndeterminate = true
+            statusText.text = "Idle"
         }
     }
 
@@ -289,6 +320,7 @@ class MainActivity : ComponentActivity() {
             text.toIntOrNull() != null -> numbered(text.toInt())
             lower == "help" || lower == "?" -> showHelp()
             lower == "conv" || lower.startsWith("conv ") -> convert(text.substring(4))
+            lower.startsWith("page") -> showPage(lower.removePrefix("page").trim().toIntOrNull() ?: 0)
             lower == "clear" -> clearConsole()
             lower == "stop" -> stopRunning(quiet = false)
             lower == "status" -> showStatus()
@@ -408,37 +440,35 @@ class MainActivity : ComponentActivity() {
                 startBusy(cmd)
                 startWatchdog(process, TIMEOUT_SECONDS)
                 phase = "[2/3] reading output"
-                val (text, truncated) = readCapped(process.inputStream)
-                if (truncated) process.destroy()
+                val outFile = File(outputDir(), "msar2_output.txt")
+                lastOutput = outFile
+                val lineCount = readToFile(process.inputStream, outFile)
                 val code = process.waitFor()
                 running = null
-                lastOutput = text
                 phase = ""
                 val secs = (System.currentTimeMillis() - started) / 1000
-                say(Console.Style.INFO, "[3/3] finished in ${secs}s, ${text.lines().size} lines, exit $code")
+                say(Console.Style.INFO, "[3/3] finished in ${secs}s, $lineCount lines, exit $code")
+                val head = if (lineCount == 0 || onDone != null) "" else displayHead(outFile)
                 ui {
                     if (onDone != null) {
                         write(Console.Style.INFO, "(building the diagram from this data, not shown raw)")
-                    } else if (text.isBlank()) {
+                    } else if (lineCount == 0) {
                         write(Console.Style.INFO, "(no output)")
                     } else {
-                        writeOutput(text) { tapAddress(it) }
+                        writeOutput(head) { tapAddress(it) }
+                        if (lineCount > DISPLAY_LINES) {
+                            write(
+                                Console.Style.WARN,
+                                "showing lines 1-$DISPLAY_LINES of $lineCount. Type  page 2  for the next part, " +
+                                    "or  only WORD  to search all lines."
+                            )
+                        }
                     }
-                    if (truncated) {
-                        write(
-                            Console.Style.WARN,
-                            "output was cut at $MAX_OUTPUT characters. Narrow the command, e.g. afl~main"
-                        )
-                    }
-                    if (truncated) {
-                        write(Console.Style.OK, "done (stopped at the output limit; this is expected for big output)")
-                    } else {
-                        write(if (code == 0) Console.Style.OK else Console.Style.WARN, "done (exit $code)")
-                    }
+                    write(if (code == 0) Console.Style.OK else Console.Style.WARN, "done (exit $code)")
                 }
                 setIdle()
-                advice(if (code == 0 || truncated) next else Advice.FAILED)
-                onDone?.invoke(text)
+                advice(if (code == 0) next else Advice.FAILED)
+                onDone?.invoke(if (outFile.length() < 8_000_000L) outFile.readText() else "")
             } catch (e: Exception) {
                 running = null
                 setIdle()
@@ -502,9 +532,9 @@ class MainActivity : ComponentActivity() {
 
     /** Shows only the lines of the last output that contain WORD. An empty WORD shows everything. */
     private fun onlyFilter(word: String) {
-        val lines = lastLines() ?: return
-        val picked = if (word.isEmpty()) lines else lines.filter { it.contains(word, ignoreCase = true) }
-        showFiltered(picked, lines.size, if (word.isEmpty()) "all lines" else "lines with '$word'")
+        filterLast(if (word.isEmpty()) "all lines" else "lines with '$word'") { line ->
+            word.isEmpty() || line.contains(word, ignoreCase = true)
+        }
     }
 
     /** Shows only the lines of the last output whose address is inside START..END (hex). */
@@ -517,22 +547,29 @@ class MainActivity : ComponentActivity() {
             advice("take the start and end from the addresses shown in the output.")
             return
         }
-        val lines = lastLines() ?: return
-        val picked = lines.filter { line ->
+        filterLast("addresses ${args.trim()}") { line ->
             val a = Regex("^\\s*0x([0-9a-fA-F]+)").find(line)?.groupValues?.get(1)?.toLongOrNull(16)
             a != null && a in start..end
         }
-        showFiltered(picked, lines.size, "addresses ${args.trim()}")
     }
 
-    private fun lastLines(): List<String>? {
-        val raw = lastOutput
-        if (raw == null) {
+    /** Streams the last output file and keeps the lines that [keep] accepts. */
+    private fun filterLast(label: String, keep: (String) -> Boolean) {
+        val file = lastOutput
+        if (file == null || !file.exists() || file.length() == 0L) {
             say(Console.Style.WARN, "No output to filter yet. Run a command first.")
             advice("type  i  or  afl  first, then  only WORD  or  range START END.")
-            return null
+            return
         }
-        return raw.trimEnd('\n').lines()
+        var total = 0
+        val picked = ArrayList<String>()
+        file.useLines { seq ->
+            seq.forEach { line ->
+                total++
+                if (picked.size < MAX_PICK && keep(line)) picked += line
+            }
+        }
+        showFiltered(picked, total, label)
     }
 
     private fun showFiltered(picked: List<String>, total: Int, label: String) {
@@ -541,33 +578,75 @@ class MainActivity : ComponentActivity() {
             advice("try another word or range, or type  only  to see everything again.")
             return
         }
+        val shown = picked.take(DISPLAY_LINES)
         ui {
-            write(Console.Style.HEADER, "Filter: $label, ${picked.size} of $total lines")
-            writeOutput(picked.joinToString("\n")) { tapAddress(it) }
+            write(Console.Style.HEADER, "Filter: $label, ${picked.size} matching of $total lines")
+            writeOutput(shown.joinToString("\n")) { tapAddress(it) }
+            if (picked.size > DISPLAY_LINES) {
+                write(Console.Style.WARN, "showing the first $DISPLAY_LINES matches. Narrow with a longer word or a smaller range.")
+            }
         }
         advice("tap an address to show its code, or filter again with  only WORD  or  range START END.")
     }
 
+    /** page N: shows lines N-1 of the last output, [DISPLAY_LINES] at a time. */
+    private fun showPage(n: Int) {
+        val file = lastOutput
+        if (n < 1 || file == null || !file.exists()) {
+            say(Console.Style.WARN, "Type  page 2  after a command has printed a long output.")
+            advice("run a command first, then  page 2  for the next part.")
+            return
+        }
+        val from = (n - 1) * DISPLAY_LINES
+        var total = 0
+        val picked = ArrayList<String>()
+        file.useLines { seq ->
+            seq.forEach { line ->
+                if (total >= from && picked.size < DISPLAY_LINES) picked += line
+                total++
+            }
+        }
+        if (picked.isEmpty()) {
+            say(Console.Style.WARN, "No page $n. The output has $total lines.")
+            advice("type  page 1  to go back to the start.")
+            return
+        }
+        ui {
+            write(Console.Style.HEADER, "Page $n: lines ${from + 1}-${from + picked.size} of $total")
+            writeOutput(picked.joinToString("\n")) { tapAddress(it) }
+        }
+        advice(if (from + picked.size < total) "type  page ${n + 1}  for the next part." else "that was the end of the output.")
+    }
+
     private fun parseHex(s: String): Long? = s.removePrefix("0x").removePrefix("0X").toLongOrNull(16)
 
-    /** Reads at most [MAX_OUTPUT] characters. Returns the text and whether it was cut short. */
-    private fun readCapped(stream: InputStream): Pair<String, Boolean> {
-        val sb = StringBuilder()
-        val reader = stream.bufferedReader()
-        val chunk = CharArray(4096)
-        var reportedAt = 0
-        while (true) {
-            val n = reader.read(chunk)
-            if (n < 0) return sb.toString() to false
-            sb.append(chunk, 0, n)
-            if (sb.length - reportedAt >= 65_536) {
-                reportedAt = sb.length
-                val kb = sb.length / 1024
-                phase = "[2/3] reading output: $kb KB so far"
+    /** Streams radare2 output into [out] with no size limit. Returns the number of lines. */
+    private fun readToFile(stream: InputStream, out: File): Int {
+        var lines = 0
+        var bytes = 0L
+        var reportedAt = 0L
+        stream.use { input ->
+            out.outputStream().buffered().use { file ->
+                val buf = ByteArray(65_536)
+                while (true) {
+                    val n = input.read(buf)
+                    if (n < 0) break
+                    file.write(buf, 0, n)
+                    bytes += n
+                    for (i in 0 until n) if (buf[i] == NEWLINE) lines++
+                    if (bytes - reportedAt >= 262_144) {
+                        reportedAt = bytes
+                        phase = "[2/3] reading output: $lines lines, ${bytes / 1024} KB so far"
+                    }
+                }
             }
-            if (sb.length > MAX_OUTPUT) return sb.substring(0, MAX_OUTPUT) to true
         }
+        return lines
     }
+
+    /** The first [DISPLAY_LINES] lines of [file], for the screen. */
+    private fun displayHead(file: File): String =
+        file.useLines { seq -> seq.take(DISPLAY_LINES).joinToString("\n") }
 
     /** Kills the command if it runs longer than [seconds]. */
     private fun startWatchdog(process: Process, seconds: Long) {
@@ -860,7 +939,7 @@ class MainActivity : ComponentActivity() {
                 return@askPassword
             }
             worker.execute {
-                val out = File(outputDir(), "$name.r2enc")
+                val out = File(outputDir(), "msar2_" + name.removePrefix("msar2_") + ".r2enc")
                 try {
                     say(Console.Style.INFO, "[1/3] reading ${File(target).length()} bytes")
                     say(Console.Style.INFO, "[2/3] deriving key (100000 rounds) and encrypting")
@@ -886,7 +965,7 @@ class MainActivity : ComponentActivity() {
                 return@askPassword
             }
             worker.execute {
-                val out = File(outputDir(), name.removeSuffix(".r2enc") + ".decrypted")
+                val out = File(outputDir(), "msar2_" + name.removePrefix("msar2_").removeSuffix(".r2enc"))
                 try {
                     say(Console.Style.INFO, "[1/3] reading ${File(target).length()} bytes")
                     say(Console.Style.INFO, "[2/3] deriving key and decrypting")
@@ -939,9 +1018,7 @@ class MainActivity : ComponentActivity() {
             try {
                 val offset = BytePatch.parseOffset(offsetText)
                 val newBytes = BytePatch.parseHex(bytesText)
-                val stem = name.substringBeforeLast('.', name)
-                val ext = if (name.contains('.')) name.substringAfterLast('.') else "bin"
-                val out = File(outputDir(), "$stem-patched.$ext")
+                val out = File(outputDir(), "msar2_" + name.removePrefix("msar2_"))
                 say(Console.Style.INFO, "[1/3] copying ${File(target).length()} bytes")
                 say(Console.Style.INFO, "[2/3] writing ${newBytes.size} bytes at 0x${"%x".format(offset)}")
                 val before = BytePatch.patch(File(target), out, offset, newBytes)
@@ -986,8 +1063,11 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         private val DEX_NAME = Regex("classes\\d*\\.dex")
-        private const val MAX_OUTPUT = 200_000
-        private const val TIMEOUT_SECONDS = 300L
+        /** Lines shown on screen at once; the full output stays in a file. */
+        private const val DISPLAY_LINES = 3_000
+        private const val MAX_PICK = 200_000
+        private const val NEWLINE: Byte = 10
+        private const val TIMEOUT_SECONDS = 900L
         private const val MAX_MANIFEST = 4_000_000L
         private val ADDRESS_INPUT = Regex("0x[0-9a-fA-F]+")
     }

@@ -14,7 +14,7 @@ import android.view.View
  * Command-prompt style console: every piece of text has a colour, so commands, output,
  * addresses, errors and advice are easy to tell apart. Only use from the UI thread.
  */
-class Console(private val maxChars: Int = 200_000) {
+class Console(private val maxChars: Int = 1_000_000) {
 
     enum class Style(val hex: String, val bold: Boolean = false) {
         PROMPT("#00E676", true),   // "r2>" prompt

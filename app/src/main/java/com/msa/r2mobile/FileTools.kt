@@ -109,6 +109,7 @@ WHAT YOU TYPE IN THE BOX
   27             block diagram of the code flow
   0x00401000     analyse that address: function, bytes, code, callers
   find WORD      search the file for WORD
+  page 2         shows the next 3000 lines of a long output (page 1 = the start)
   only WORD      show only the last output's lines that contain WORD
   range S E      show only the last output's lines between addresses S and E
   any r2 command sent to radare2, e.g.  iI   or   afl~main
@@ -213,7 +214,7 @@ STEP 2  Look at the bytes at that address.
 
 STEP 3  Patch a copy.
   Tap FUNCTIONS, pick 25, then Run. Type the offset (hex) and the new bytes (hex).
-  The app writes NAME-patched.EXT in your app folder. Your original is not changed.
+  The app writes msar2_NAME.EXT in your app folder. Your original is never changed.
   The console shows the bytes before and after.
 
 STEP 4  Check the result.
@@ -235,6 +236,20 @@ ENCRYPTING
   23 locks the loaded file with a password. The output is NAME.r2enc.
   24 unlocks it with the same password. If the password is lost, the file cannot be opened.
   The password is never stored by the app.
+
+REBUILD AN APK AFTER PATCHING (on your computer, with the Android SDK tools)
+  The app makes msar2_ copies only. To install a changed app you rebuild and sign it:
+  1. Copy msar2_NAME.apk to the computer.
+  2. Unpack:       apktool d msar2_NAME.apk -o src
+  3. Edit files in src (or replace the patched classes.dex).
+  4. Rebuild:      apktool b src -o msar2_NAME_built.apk
+  5. Align:        zipalign -p -f 4 msar2_NAME_built.apk msar2_NAME_aligned.apk
+  6. Make a key once:
+                   keytool -genkeypair -keystore my.keystore -alias mykey -keyalg RSA -keysize 2048 -validity 10000
+  7. Sign:         apksigner sign --ks my.keystore --out msar2_done.apk msar2_NAME_aligned.apk
+  8. Check:        apksigner verify msar2_done.apk
+  9. Install msar2_done.apk. A different signing key cannot update the original app,
+     so uninstall the original first. Keep your keystore safe; you need it for updates.
 
 SAVING
   Outputs are saved in your app folder, in Android > data > com.msa.r2mobile > files.
