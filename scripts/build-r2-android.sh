@@ -36,6 +36,8 @@ ar = '$TOOLCHAIN/llvm-ar'
 ranlib = '$TOOLCHAIN/llvm-ranlib'
 strip = '$TOOLCHAIN/llvm-strip'
 pkgconfig = 'false'
+# Build-time helper programs (sdb) must run on the x86 host: run them via QEMU.
+exe_wrapper = ['qemu-aarch64-static']
 
 [host_machine]
 system = 'android'
@@ -45,7 +47,7 @@ endian = 'little'
 EOF
 
 rm -rf "$WORK/build" "$WORK/out"
-meson setup "$WORK/build" "$SRC" \
+CFLAGS="-static" LDFLAGS="-static" meson setup "$WORK/build" "$SRC" \
     --cross-file "$CROSS" \
     --prefix="$WORK/out" \
     --default-library=static \
