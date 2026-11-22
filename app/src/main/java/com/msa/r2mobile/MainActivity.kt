@@ -7,8 +7,8 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.OpenableColumns
 import android.text.InputType
-import android.content.res.ColorStateList
 import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.util.TypedValue
 import java.util.concurrent.TimeUnit
 import android.view.ScaleGestureDetector
@@ -41,7 +41,13 @@ import java.util.zip.ZipFile
 class MainActivity : ComponentActivity() {
 
     private val worker: ExecutorService = Executors.newSingleThreadExecutor()
-    private val console = Console()
+    private var console = Console()
+    /** One console per tab. [console] and [lastOutput] belong to the active tab. */
+    private class Tab(val name: String, var console: Console, var output: File?)
+    private val tabs = mutableListOf<Tab>()
+    private var activeTab = 0
+    /** EDIT mode: tapping an address opens the byte editor instead of reading code. */
+    @Volatile private var editMode = false
     private lateinit var outputText: TextView
     private lateinit var scrollView: ScrollView
     private lateinit var cmdInput: EditText
@@ -128,6 +134,10 @@ class MainActivity : ComponentActivity() {
         findViewById<Button>(R.id.fileMenuButton).setOnClickListener { dropdown(it, fileMenu()) }
         findViewById<Button>(R.id.runMenuButton).setOnClickListener { dropdown(it, runMenu()) }
         findViewById<Button>(R.id.findMenuButton).setOnClickListener { dropdown(it, findMenu()) }
+        tabs += Tab("Tab 1", console, null)
+        updateTabButton()
+        findViewById<Button>(R.id.tabMenuButton).setOnClickListener { dropdown(it, tabMenu()) }
+        findViewById<Button>(R.id.addTabButton).setOnClickListener { addTab() }
         findViewById<Button>(R.id.viewMenuButton).setOnClickListener { dropdown(it, viewMenu()) }
         cmdInput.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_GO || actionId == EditorInfo.IME_ACTION_DONE) {
@@ -552,6 +562,7 @@ class MainActivity : ComponentActivity() {
 
     /** Tapping an address shows the 24 instructions that start there. */
     private fun tapAddress(addr: String) {
+        if (editMode) { openEditor(addr); return }
         runR2("s $addr;pd 24", "tap another address, or type  only WORD  to filter this output.")
     }
 
@@ -812,10 +823,19 @@ class MainActivity : ComponentActivity() {
             R.id.findMenuButton to "#FF9100",       // FIND: orange
             R.id.viewMenuButton to "#AA00FF",       // VIEW: purple
             R.id.fullscreenButton to "#607D8B",     // FULL: slate
+            R.id.tabMenuButton to "#00897B",        // TAB: teal
+            R.id.addTabButton to "#00897B",         // +: teal
         )
         for ((id, hex) in colours) {
             findViewById<Button>(id).apply {
-                backgroundTintList = ColorStateList.valueOf(Color.parseColor(hex))
+                // A coloured shape, not a tint: the tint did not show on this theme.
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.RECTANGLE
+                    cornerRadius = 18f
+                    setColor(Color.parseColor(hex))
+                }
+                stateListAnimator = null
+                elevation = 0f
                 setTextColor(Color.WHITE)
             }
         }
@@ -933,6 +953,131 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // ---- EDIT mode, byte editor, tabs, NEXT helper ----------------------------
+
+    private fun toggleEdit() {
+        editMode = !editMode
+        if (editMode) {
+            say(Console.Style.OK, "EDIT mode on. Tap an address to open the byte editor.")
+            advice("tap an address from the output, change the hex, then press Compile copy. Full steps: FIND > Step-by-step patching guide.")
+        } else {
+            say(Console.Style.INFO, "READ mode on. Tapping an address reads the code again.")
+            advice("tap an address to read it, or open FIND > NEXT step.")
+        }
+    }
+
+    /** Reads up to [count] bytes at [offset] of [file]. Returns null when the offset is outside the file. */
+    private fun readBytesAt(file: File, offset: Long, count: Int): ByteArray? {
+        if (offset < 0 || offset >= file.length()) return null
+        java.io.RandomAccessFile(file, "r").use { raf ->
+            raf.seek(offset)
+            val buf = ByteArray(count)
+            val n = raf.read(buf)
+            return if (n <= 0) null else buf.copyOf(n)
+        }
+    }
+
+    /** EDIT mode: shows the 16 bytes at an address, so they can be changed and compiled into a copy. */
+    private fun openEditor(addr: String) {
+        val path = targetPath
+        val name = loadedName
+        if (path == null || name == null) {
+            say(Console.Style.WARN, "EDIT needs a loaded file.")
+            advice("open a file with FILE > Open a file, then tap an address.")
+            return
+        }
+        val current = parseHex(addr)?.let { readBytesAt(File(path), it, 16) }
+        val offsetBox = EditText(this).apply {
+            setText(addr)
+            inputType = InputType.TYPE_CLASS_TEXT
+        }
+        val bytesBox = EditText(this).apply {
+            hint = "new bytes in hex, e.g. 1f 20 03 d5"
+            inputType = InputType.TYPE_CLASS_TEXT
+            if (current != null) setText(BytePatch.hex(current))
+        }
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(48, 16, 48, 0)
+            addView(offsetBox)
+            addView(bytesBox)
+        }
+        val note = if (current == null) {
+            "No bytes found at that offset. Type a valid offset in the first box."
+        } else {
+            "The second box shows the 16 bytes at this offset. Change the hex, then Compile copy. " +
+                "The original file is not changed. For ELF and PE files the address is not the file offset: see EDIT CODE in the guide."
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Edit code in $name")
+            .setMessage(note)
+            .setView(box)
+            .setPositiveButton("Compile copy") { _, _ ->
+                patchLoaded(path, name, offsetBox.text.toString(), bytesBox.text.toString())
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    /** Looks at what has been done so far and names the most useful next action. */
+    private fun nextStep() {
+        val hasOutput = lastOutput?.exists() == true
+        when {
+            targetPath == null -> advice("no file loaded. Tap FILE > Open a file and pick the file you want to study.")
+            !hasOutput -> advice("file is loaded. Type 1 (file info), then 11 (auto-analyze) so functions appear.")
+            editMode -> advice("EDIT mode is on. Tap an address in the output to open the byte editor.")
+            else -> advice("output is ready. Tap an address to read that code, or FIND > Find a word to search for text such as license.")
+        }
+    }
+
+    // Tabs: each tab keeps its own console and last output. [console] and [lastOutput] always belong to the active tab.
+
+    private fun saveTab() {
+        val t = tabs[activeTab]
+        t.console = console
+        t.output = lastOutput
+    }
+
+    private fun showTab(i: Int) {
+        activeTab = i
+        val t = tabs[i]
+        console = t.console
+        lastOutput = t.output
+        updateTabButton()
+        ui { }
+    }
+
+    private fun updateTabButton() {
+        findViewById<Button>(R.id.tabMenuButton).text = "${tabs[activeTab].name} \u25BC"
+    }
+
+    private fun switchTab(i: Int) {
+        if (running != null) {
+            say(Console.Style.WARN, "A command is running. Wait for it, or press STOP, before switching tabs.")
+            return
+        }
+        if (i == activeTab) return
+        saveTab()
+        showTab(i)
+        advice("this tab has its own output. Use the TAB menu to go back to another tab.")
+    }
+
+    private fun addTab() {
+        if (running != null) {
+            say(Console.Style.WARN, "A command is running. Wait for it, or press STOP, before adding a tab.")
+            return
+        }
+        saveTab()
+        tabs += Tab("Tab ${tabs.size + 1}", Console(), null)
+        showTab(tabs.size - 1)
+        say(Console.Style.HEADER, "New ${tabs[activeTab].name}. Type a number, a 0x address, or a command, or open FUNCTIONS.")
+        advice("research in this tab; the TAB menu switches back to the others.")
+    }
+
+    private fun tabMenu(): List<Pair<String, () -> Unit>> =
+        tabs.mapIndexed { i, t -> item((if (i == activeTab) "> " else "   ") + t.name) { switchTab(i) } } +
+            listOf(item("+ Add a new tab") { addTab() })
+
     // ---- dropdown categories ----------------------------------------------
 
     /** Opens a list of actions under [anchor]. Each label runs its action when chosen. */
@@ -972,11 +1117,13 @@ class MainActivity : ComponentActivity() {
             cmdInput.setSelection(cmdInput.text.length)
             cmdInput.requestFocus()
         },
+        item("NEXT step: what should I do now?") { nextStep() },
         item("Step-by-step patching guide") { showGuide() },
         item("radare2 reference with examples (28)") { showReference() },
     )
 
     private fun viewMenu(): List<Pair<String, () -> Unit>> = listOf(
+        item(if (editMode) "Mode: EDIT is on. Tap for READ" else "Mode: READ is on. Tap for EDIT") { toggleEdit() },
         item("Scroll to the top") { scrollView.fullScroll(ScrollView.FOCUS_UP) },
         item("Scroll to the bottom") { scrollView.fullScroll(ScrollView.FOCUS_DOWN) },
         item("Help: list of shortcuts") { showHelp() },
@@ -1162,7 +1309,11 @@ class MainActivity : ComponentActivity() {
             try {
                 val offset = BytePatch.parseOffset(offsetText)
                 val newBytes = BytePatch.parseHex(bytesText)
-                val out = File(outputDir(), "msar2_" + name.removePrefix("msar2_"))
+                var out = File(outputDir(), "msar2_" + name.removePrefix("msar2_"))
+                // Patching a copy that is already loaded must not overwrite the file it reads from.
+                if (out.absolutePath == File(target).absolutePath) {
+                    out = File(outputDir(), "msar2_edit_" + name.removePrefix("msar2_"))
+                }
                 say(Console.Style.INFO, "[1/3] copying ${File(target).length()} bytes")
                 say(Console.Style.INFO, "[2/3] writing ${newBytes.size} bytes at 0x${"%x".format(offset)}")
                 val before = BytePatch.patch(File(target), out, offset, newBytes)

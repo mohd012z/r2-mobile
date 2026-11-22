@@ -232,6 +232,23 @@ APK FILES
   3. Put it back in the APK, then SIGN the APK. Android refuses unsigned or changed APKs.
      This app does not repack or sign yet. Use a signing tool on your computer.
 
+EDIT CODE FROM AN ANALYSIS
+  Goal: change one instruction, then check the result. The original file is never changed.
+  1. Find the code: FUNCTIONS, or FLOW > block diagram (27). Note the address of the instruction.
+  2. Turn on EDIT: VIEW > Mode. Tapping an address now opens the byte editor.
+  3. The editor shows 16 bytes at that address. Read the bytes with the table above (e.g. 1f 20 03 d5 = NOP).
+  4. Type the new bytes in hex, same length as the old ones. A different length shifts all later code and breaks it.
+  5. Press Compile copy. The app writes msar2_NAME and prints the before and after bytes.
+  6. Check it: type  s ADDRESS;pd 5  and confirm the new instruction is there.
+  7. To undo, patch the old bytes back (they were printed as 'before').
+  ADDRESS OR FILE OFFSET
+  - Raw files (classes.dex, plain binaries): the address shown is the file offset. Use it as is.
+  - ELF and PE files: the address is a memory address, not a file position. Type  iS  and find the section
+    that holds your address. Offset = address - section start + section file position. Type that offset in the editor.
+  SAFETY
+  - A wrong byte can stop the app from starting. Keep a copy of the original and test the result.
+  - Patched APKs must be rebuilt and signed before Android installs them (see REBUILD AN APK AFTER PATCHING).
+
 ENCRYPTING
   23 locks the loaded file with a password. The output is NAME.r2enc.
   24 unlocks it with the same password. If the password is lost, the file cannot be opened.

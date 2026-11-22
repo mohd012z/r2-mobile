@@ -59,6 +59,30 @@
         android:text="Idle"
         android:textSize="12sp" />
 
+    <!-- Console tabs: TAB switches between tabs, + opens a new one for another piece of research. -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/tabMenuButton"
+            style="@style/CompactButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Tab 1 ▼" />
+
+        <Button
+            android:id="@+id/addTabButton"
+            style="@style/CompactButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingLeft="18dp"
+            android:paddingRight="18dp"
+            android:text="+" />
+    </LinearLayout>
+
     <!-- Command box: type a number, paste an address (0x...), or a radare2 command. -->
     <LinearLayout
         android:layout_width="match_parent"
