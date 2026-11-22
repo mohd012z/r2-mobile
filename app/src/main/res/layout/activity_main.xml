@@ -1,130 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Portrait: output on top (scrolls up/down and sideways), controls grouped at the bottom. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="8dp">
+    android:padding="6dp">
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal">
-
-        <Button
-            android:id="@+id/openButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Open" />
-
-        <Button
-            android:id="@+id/functionsButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Functions" />
-
-        <Button
-            android:id="@+id/filterButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Filter" />
-    </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal">
-
-        <EditText
-            android:id="@+id/cmdInput"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:hint="number (e.g. 11), find WORD, or r2 command"
-            android:imeOptions="actionGo"
-            android:inputType="text"
-            android:fontFamily="monospace"
-            android:singleLine="true" />
-
-        <Button
-            android:id="@+id/runButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Run" />
-    </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal">
-
-        <Button
-            android:id="@+id/stopButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Stop" />
-
-        <Button
-            android:id="@+id/helpButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Help" />
-
-        <Button
-            android:id="@+id/saveButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Save" />
-
-        <Button
-            android:id="@+id/clearButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Clear" />
-    </LinearLayout>
-
-    <ProgressBar
-        android:id="@+id/progressBar"
-        style="?android:attr/progressBarStyleHorizontal"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:indeterminate="true"
-        android:visibility="gone" />
-
-    <TextView
-        android:id="@+id/statusText"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Idle"
-        android:textSize="12sp" />
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal">
-
-        <Button
-            android:id="@+id/topButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Top" />
-
-        <Button
-            android:id="@+id/bottomButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Bottom" />
-    </LinearLayout>
-
-    <!-- Vertical scroll: drag the bar on the right, or use Top and Bottom. -->
     <ScrollView
         android:id="@+id/scrollView"
         android:layout_width="match_parent"
@@ -135,7 +16,7 @@
         android:scrollbarSize="10dp"
         android:scrollbarStyle="insideOverlay">
 
-        <!-- Horizontal scroll: long lines are not wrapped, swipe sideways to read them. -->
+        <!-- Long lines are not wrapped: swipe sideways to read them. -->
         <HorizontalScrollView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -156,5 +37,192 @@
                 android:textSize="12sp" />
         </HorizontalScrollView>
     </ScrollView>
+
+    <ProgressBar
+        android:id="@+id/progressBar"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:indeterminate="true"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/statusText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Idle"
+        android:textSize="12sp" />
+
+    <!-- Command box: type a number, paste an address (0x...), or a radare2 command. -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <EditText
+            android:id="@+id/cmdInput"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:fontFamily="monospace"
+            android:hint="number, 0x address, or find WORD"
+            android:imeOptions="actionGo"
+            android:inputType="text"
+            android:singleLine="true" />
+
+        <Button
+            android:id="@+id/runButton"
+            style="@style/CompactButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingLeft="14dp"
+            android:paddingRight="14dp"
+            android:text="Run" />
+    </LinearLayout>
+
+    <!-- Category rows: FILE, RUN, FIND, VIEW. -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="44dp"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:text="FILE"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/openButton"
+            style="@style/CompactButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Open" />
+
+        <Button
+            android:id="@+id/saveButton"
+            style="@style/CompactButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Save" />
+
+        <Button
+            android:id="@+id/clearButton"
+            style="@style/CompactButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Clear" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="44dp"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:text="RUN"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/analyzeButton"
+            style="@style/CompactButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Analyze" />
+
+        <Button
+            android:id="@+id/stopButton"
+            style="@style/CompactButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Stop" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="44dp"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:text="FIND"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/functionsButton"
+            style="@style/CompactButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Functions" />
+
+        <Button
+            android:id="@+id/filterButton"
+            style="@style/CompactButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Filter" />
+
+        <Button
+            android:id="@+id/guideButton"
+            style="@style/CompactButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Guide" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="44dp"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:text="VIEW"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/topButton"
+            style="@style/CompactButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Top" />
+
+        <Button
+            android:id="@+id/bottomButton"
+            style="@style/CompactButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Bottom" />
+
+        <Button
+            android:id="@+id/helpButton"
+            style="@style/CompactButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Help" />
+    </LinearLayout>
 
 </LinearLayout>

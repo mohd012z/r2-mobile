@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Landscape: controls on the left (scrollable), output fills the right side full height. -->
+<!-- Landscape: controls in a column on the left (scrollable), output fills the right side. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="horizontal"
-    android:padding="8dp">
+    android:padding="6dp">
 
     <ScrollView
         android:layout_width="0dp"
@@ -16,45 +16,19 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal">
-
-                <Button
-                    android:id="@+id/openButton"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Open" />
-
-                <Button
-                    android:id="@+id/functionsButton"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Functions" />
-
-                <Button
-                    android:id="@+id/filterButton"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Filter" />
-            </LinearLayout>
-
             <EditText
                 android:id="@+id/cmdInput"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="number (e.g. 11), find WORD, or r2 command"
+                android:fontFamily="monospace"
+                android:hint="number, 0x address, or find WORD"
                 android:imeOptions="actionGo"
                 android:inputType="text"
-                android:fontFamily="monospace"
                 android:singleLine="true" />
 
             <Button
                 android:id="@+id/runButton"
+                style="@style/CompactButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Run" />
@@ -65,21 +39,16 @@
                 android:orientation="horizontal">
 
                 <Button
-                    android:id="@+id/stopButton"
+                    android:id="@+id/openButton"
+                    style="@style/CompactButton"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="Stop" />
-
-                <Button
-                    android:id="@+id/helpButton"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Help" />
+                    android:text="Open" />
 
                 <Button
                     android:id="@+id/saveButton"
+                    style="@style/CompactButton"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
@@ -87,10 +56,93 @@
 
                 <Button
                     android:id="@+id/clearButton"
+                    style="@style/CompactButton"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:text="Clear" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/analyzeButton"
+                    style="@style/CompactButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Analyze" />
+
+                <Button
+                    android:id="@+id/stopButton"
+                    style="@style/CompactButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Stop" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/functionsButton"
+                    style="@style/CompactButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Functions" />
+
+                <Button
+                    android:id="@+id/filterButton"
+                    style="@style/CompactButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Filter" />
+
+                <Button
+                    android:id="@+id/guideButton"
+                    style="@style/CompactButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Guide" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/topButton"
+                    style="@style/CompactButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Top" />
+
+                <Button
+                    android:id="@+id/bottomButton"
+                    style="@style/CompactButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Bottom" />
+
+                <Button
+                    android:id="@+id/helpButton"
+                    style="@style/CompactButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Help" />
             </LinearLayout>
 
             <ProgressBar
@@ -107,26 +159,6 @@
                 android:layout_height="wrap_content"
                 android:text="Idle"
                 android:textSize="12sp" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal">
-
-                <Button
-                    android:id="@+id/topButton"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Top" />
-
-                <Button
-                    android:id="@+id/bottomButton"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Bottom" />
-            </LinearLayout>
         </LinearLayout>
     </ScrollView>
 

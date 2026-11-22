@@ -1,46 +1,49 @@
 package com.msa.r2mobile
 
-/** "What next" guidance shown after every action. Keep texts short and concrete. */
+/**
+ * "What next" guidance shown after every action. Each line says exactly where to act:
+ * the box at the bottom (type a number or paste an address, then press RUN) or a button.
+ */
 object Advice {
-    const val GENERIC = "type a number (see 'functions'), or 'help' for shortcuts."
-    const val FAILED = "the command did not finish cleanly. Read the message above, or type 'help'."
+    const val GENERIC = "tap FUNCTIONS to pick a step, or type a number in the box and press RUN."
+    const val FAILED = "the command did not finish. Read the message above, then try again or type help."
 
     private val hints: Map<Int, String> = mapOf(
-        1 to "run 11 (auto-analyze) so that 12 to 14 have data. Then 2 for the summary.",
-        2 to "note the architecture. Next: 11 (auto-analyze), then 12 (list functions).",
-        3 to "this is where the program starts. Next: 13 to read the code there.",
-        4 to "code is in .text. Next: 9 for readable text, or 13 for the code.",
-        5 to "these libraries are needed to run. Next: 6 to see the functions it calls.",
-        6 to "look for network (connect), files (open) and crypto calls. Next: 18 to search for a word.",
-        7 to "these are functions it offers to others. Next: 8 for all symbol names.",
-        8 to "few names means the file is stripped. Run 11 first, then 12.",
-        9 to "look for web addresses, keys and messages. Next: 18 to search one word you noticed.",
-        10 to "found something interesting? Next: 18 to search for that word.",
-        11 to "analysis finished. Next: 12 to list the functions found.",
-        12 to "copy an address from this list. Next: type  s ADDRESS;pdf  in the box and Run.",
-        13 to "read the left column for addresses. Next: 14 to see the branches as a chart.",
-        14 to "boxes are steps, arrows are jumps. Next: 17 to see who calls this code.",
-        15 to "the first bytes show the file type. Next: 2 for the summary.",
-        16 to "next: 17 to see which code points here.",
-        17 to "pick an address from the list and type  s ADDRESS;pdf  in the box, then Run.",
-        18 to "note the address next to a match. Next: type  s ADDRESS;px 64  in the box to see the bytes.",
-        19 to "matches show addresses. Next: 15 or 16 to see the bytes there.",
-        20 to "the list shows what is inside. Next: 21 to extract classes.dex, which holds the app code.",
-        21 to "classes.dex is now the target. Next: 1 (file info), then 11 (auto-analyze), then 12.",
+        1 to "type 11 in the box and press RUN (auto-analyze). Then 12 lists the functions.",
+        2 to "type 11 in the box and press RUN (auto-analyze), then 12 to list the functions.",
+        3 to "the program starts here. Type 13 in the box to read the code at this point.",
+        4 to "code is in .text. Type 9 for readable text, or 13 for the code.",
+        5 to "these libraries are needed to run. Type 6 to see the functions it calls.",
+        6 to "look for network (connect), files (open) and crypto calls. Type 18 to search a word.",
+        7 to "these are functions it offers to other programs. Type 8 for all names.",
+        8 to "few names means the file is stripped. Type 11 (auto-analyze), then 12.",
+        9 to "look for web addresses, keys and messages. Type 18 and a word you noticed.",
+        10 to "found something interesting? Type 18 and that word to find where it is.",
+        11 to "analysis finished. Type 12 in the box to list the functions found.",
+        12 to "copy one address from this list, paste it in the box and press RUN to see its code.",
+        13 to "the left column shows addresses. Type 14 to see the branches as a chart.",
+        14 to "boxes are steps, arrows are jumps. Type 17 to see who calls this code.",
+        15 to "the first bytes show the file type. Type 2 for the summary.",
+        16 to "type 17 to see which code points here.",
+        17 to "paste an address from the list in the box and press RUN to see its code.",
+        18 to "note an address next to a match. Paste it in the box and press RUN to see the code there.",
+        19 to "matches show addresses. Paste one in the box and press RUN.",
+        20 to "the list shows what is inside. Type 21 to extract classes.dex, which holds the app code.",
+        21 to "classes.dex is now the target. Type 1 (file info), then 11 (auto-analyze).",
     )
 
     fun afterFunction(number: Int): String = hints[number] ?: GENERIC
 
     fun afterOpen(category: FileCategory): String = when (category) {
-        FileCategory.APK -> "Next: 20 to list what is inside the APK, then 21 to extract classes.dex."
-        FileCategory.DEX -> "Next: 1 (file info), then 11 (auto-analyze)."
+        FileCategory.APK -> "type 20 in the box to list what is inside the APK, then 21 to extract classes.dex."
+        FileCategory.DEX -> "type 1 (file info) in the box, then 11 (auto-analyze)."
         FileCategory.ELF_SHARED, FileCategory.ELF_EXEC, FileCategory.PE, FileCategory.MACHO ->
-            "Next: 1 (file info), then 11 (auto-analyze)."
-        FileCategory.JAR, FileCategory.ZIP -> "Next: 20 to list the archive contents."
+            "type 1 (file info) in the box, then 11 (auto-analyze)."
+        FileCategory.JAR, FileCategory.ZIP -> "type 20 in the box to list the archive contents."
         FileCategory.IMAGE, FileCategory.PDF, FileCategory.UNKNOWN ->
-            "Next: 15 (hex dump) to see the first bytes, or 9 for readable text."
+            "type 15 (hex dump) in the box to see the first bytes, or 9 for readable text."
     }
 
     fun wrongType(category: FileCategory): String =
-        "your file is ${category.label}. Type 'functions' to see only the steps that work on it."
+        "your file is ${category.label}. Tap FUNCTIONS to see only the steps that work on it."
 }

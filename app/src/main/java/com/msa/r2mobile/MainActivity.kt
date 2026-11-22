@@ -94,6 +94,8 @@ class MainActivity : ComponentActivity() {
         findViewById<Button>(R.id.clearButton).setOnClickListener { clearConsole() }
         findViewById<Button>(R.id.topButton).setOnClickListener { scrollView.fullScroll(ScrollView.FOCUS_UP) }
         findViewById<Button>(R.id.bottomButton).setOnClickListener { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
+        findViewById<Button>(R.id.analyzeButton).setOnClickListener { analyzeInput() }
+        findViewById<Button>(R.id.guideButton).setOnClickListener { showGuide() }
         cmdInput.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_GO || actionId == EditorInfo.IME_ACTION_DONE) {
                 runTyped()
@@ -241,6 +243,9 @@ class MainActivity : ComponentActivity() {
             write(Console.Style.INFO, "  tap address  any address in the output shows 24 instructions from there")
             write(Console.Style.INFO, "  colours      pink loop, blue forward branch, green short jump,")
             write(Console.Style.INFO, "               orange call, teal return")
+            write(Console.Style.INFO, "  0x...        paste an address: shows its function, bytes, code and callers")
+            write(Console.Style.INFO, "  analyze      same as pasting, using the address in the box (button ANALYZE)")
+            write(Console.Style.INFO, "  guide        step-by-step guide to addresses, offsets and patching")
             write(Console.Style.INFO, "  help         this list")
             write(Console.Style.INFO, "Anything else goes to radare2 as a command, e.g. iI or afl~main")
         }
@@ -267,6 +272,7 @@ class MainActivity : ComponentActivity() {
         cmdInput.setText("")
         val lower = text.lowercase()
         when {
+            ADDRESS_INPUT.matches(text) -> analyzeAddress(text)
             text.toIntOrNull() != null -> numbered(text.toInt())
             lower == "help" || lower == "?" -> showHelp()
             lower == "clear" -> clearConsole()
@@ -398,10 +404,14 @@ class MainActivity : ComponentActivity() {
                             "output was cut at $MAX_OUTPUT characters. Narrow the command, e.g. afl~main"
                         )
                     }
-                    write(if (code == 0) Console.Style.OK else Console.Style.WARN, "done (exit $code)")
+                    if (truncated) {
+                        write(Console.Style.OK, "done (stopped at the output limit; this is expected for big output)")
+                    } else {
+                        write(if (code == 0) Console.Style.OK else Console.Style.WARN, "done (exit $code)")
+                    }
                 }
                 setIdle()
-                advice(if (code == 0) next else Advice.FAILED)
+                advice(if (code == 0 || truncated) next else Advice.FAILED)
             } catch (e: Exception) {
                 running = null
                 setIdle()
@@ -409,6 +419,32 @@ class MainActivity : ComponentActivity() {
                 advice(Advice.FAILED)
             }
         }
+    }
+
+    // ---- analyze an address --------------------------------------------------
+
+    /** The ANALYZE button: uses the address in the box. */
+    private fun analyzeInput() {
+        val text = cmdInput.text.toString().trim()
+        if (ADDRESS_INPUT.matches(text)) {
+            cmdInput.setText("")
+            analyzeAddress(text)
+        } else {
+            say(Console.Style.WARN, "Paste an address such as 0x00806de7 in the box first.")
+            advice("copy an address from function 12 or from the output, paste it in the box, then tap ANALYZE.")
+        }
+    }
+
+    /**
+     * One combined pass over an address: the function it belongs to, its bytes,
+     * the code there, and the places that jump or call to it. Each part has a numbered label.
+     */
+    private fun analyzeAddress(addr: String) {
+        runR2(
+            "s $addr;?e 1 function at this address;afi;?e 2 bytes at this address;px 64;" +
+                "?e 3 code from this address;pd 12;?e 4 places that jump or call here;axt",
+            "tap any address in the code to follow it, or paste another address in the box."
+        )
     }
 
     // ---- progress, taps and output filters ---------------------------------
@@ -797,5 +833,6 @@ class MainActivity : ComponentActivity() {
         private const val MAX_OUTPUT = 200_000
         private const val TIMEOUT_SECONDS = 300L
         private const val MAX_MANIFEST = 4_000_000L
+        private val ADDRESS_INPUT = Regex("0x[0-9a-fA-F]+")
     }
 }
