@@ -203,6 +203,68 @@ class MainActivity : ComponentActivity() {
 
     private fun advice(text: String) = ui { write(Console.Style.ADVICE, "NEXT: $text") }
 
+    /** Where saved projects live: one folder per project, with a copy of the file and the console log. */
+    private fun projectRoot(): File = File(getExternalFilesDir(null) ?: filesDir, "projects")
+
+    /** Saves the loaded file and the console log as a project, so the work can be reopened later. */
+    private fun saveProject() {
+        val path = targetPath
+        if (path == null) {
+            say(Console.Style.WARN, "No file loaded, so there is nothing to save.")
+            advice("open a file first with FILE > Open a file.")
+            return
+        }
+        val text = console.plainText()
+        val name = loadedName ?: File(path).name
+        val category = loaded?.name ?: FileCategory.UNKNOWN.name
+        worker.execute {
+            try {
+                val dir = File(projectRoot(), "project-${System.currentTimeMillis()}")
+                dir.mkdirs()
+                File(path).copyTo(File(dir, "target.bin"), overwrite = true)
+                File(dir, "console.txt").writeText(text)
+                File(dir, "project.txt").writeText("name=$name\ncategory=$category\n")
+                say(Console.Style.OK, "project saved: ${dir.name} ($name)")
+                advice("FILE > Open a saved project brings it back. The console log is kept in console.txt inside that folder.")
+            } catch (e: Exception) {
+                say(Console.Style.ERROR, "could not save the project: ${e.message}")
+                advice("check that the phone has free storage.")
+            }
+        }
+    }
+
+    /** Lists saved projects and loads the chosen one as the target file. */
+    private fun openProject() {
+        val dirs = projectRoot().listFiles { f -> f.isDirectory && File(f, "target.bin").isFile }
+            ?.sortedByDescending { it.name }
+            .orEmpty()
+        if (dirs.isEmpty()) {
+            say(Console.Style.WARN, "No saved projects yet.")
+            advice("load a file, then use FILE > Save project.")
+            return
+        }
+        val labels = dirs.map { d ->
+            val name = File(d, "project.txt").takeIf { it.isFile }?.readLines()
+                ?.firstOrNull { it.startsWith("name=") }?.removePrefix("name=") ?: d.name
+            "$name  (${d.name})"
+        }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("Open a saved project")
+            .setItems(labels) { _, which -> restoreProject(dirs[which]) }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun restoreProject(dir: File) {
+        val name = File(dir, "project.txt").takeIf { it.isFile }?.readLines()
+            ?.firstOrNull { it.startsWith("name=") }?.removePrefix("name=")
+        loadPath(File(dir, "target.bin").absolutePath)
+        loadedName = name ?: loadedName
+        say(Console.Style.OK, "project opened: ${loadedName ?: dir.name}")
+        say(Console.Style.INFO, "the previous console log is in: ${File(dir, "console.txt").absolutePath}")
+        advice("run the step you need again; the old results are in that log file.")
+    }
+
     private fun clearConsole() {
         ui { clear() }
         advice("tap OPEN to load a file, or type 'help'.")
@@ -1282,6 +1344,8 @@ class MainActivity : ComponentActivity() {
     private fun fileMenu(): List<Pair<String, () -> Unit>> = listOf(
         item("Open a file") { pickFile.launch(arrayOf("*/*")) },
         item("Save console to a file") { saveLog() },
+        item("Save project (file + console log)") { saveProject() },
+        item("Open a saved project") { openProject() },
         item("Clear the screen") { clearConsole() },
         item("Encrypt the file with a password (23)") { numbered(23) },
         item("Decrypt a .r2enc file (24)") { numbered(24) },
@@ -1293,6 +1357,9 @@ class MainActivity : ComponentActivity() {
     private fun runMenu(): List<Pair<String, () -> Unit>> = listOf(
         item("Analyze the address in the box") { analyzeInput() },
         item("Block diagram of the code flow (27)") { numbered(27) },
+        item("Call graph as DOT text (agC)") {
+            runR2("agC", "copy the DOT text into any graph viewer to draw it. Tap an address to read a function.")
+        },
         item("Stop a running command") { stopRunning(quiet = false) },
     )
 
