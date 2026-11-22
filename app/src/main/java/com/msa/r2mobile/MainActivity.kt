@@ -701,11 +701,10 @@ class MainActivity : ComponentActivity() {
         }
         var total = 0
         val picked = ArrayList<String>()
-        file.useLines { seq ->
-            seq.forEach { line ->
-                total++
-                if (picked.size < MAX_PICK && keep(line)) picked += line
-            }
+        forEachLine(file) { line ->
+            total++
+            if (picked.size < MAX_PICK && keep(line)) picked += line
+            true
         }
         showFiltered(picked, total, label)
     }
@@ -738,11 +737,10 @@ class MainActivity : ComponentActivity() {
         val from = (n - 1) * DISPLAY_LINES
         var total = 0
         val picked = ArrayList<String>()
-        file.useLines { seq ->
-            seq.forEach { line ->
-                if (total >= from && picked.size < DISPLAY_LINES) picked += line
-                total++
-            }
+        forEachLine(file) { line ->
+            if (total >= from && picked.size < DISPLAY_LINES) picked += line
+            total++
+            true
         }
         if (picked.isEmpty()) {
             say(Console.Style.WARN, "No page $n. The output has $total lines.")
@@ -789,8 +787,41 @@ class MainActivity : ComponentActivity() {
     }
 
     /** The first [DISPLAY_LINES] lines of [file], for the screen. */
-    private fun displayHead(file: File): String =
-        file.useLines { seq -> seq.take(DISPLAY_LINES).joinToString("\n") }
+    private fun displayHead(file: File): String {
+        val head = ArrayList<String>()
+        forEachLine(file) { line ->
+            head += line
+            head.size < DISPLAY_LINES
+        }
+        return head.joinToString("\n")
+    }
+
+    /**
+     * Reads the file one line at a time. Each line is cut to [MAX_LINE_CHARS], so one huge line
+     * (for example a long JSON or hex dump with no line breaks) cannot run the phone out of memory.
+     * [visit] returns false to stop early.
+     */
+    private fun forEachLine(file: File, visit: (String) -> Boolean) {
+        java.io.BufferedReader(java.io.FileReader(file), 65_536).use { reader ->
+            val sb = StringBuilder()
+            while (true) {
+                sb.setLength(0)
+                var cut = false
+                var c: Int
+                var any = false
+                while (true) {
+                    c = reader.read()
+                    if (c < 0 || c == '\n'.code) break
+                    any = true
+                    if (sb.length < MAX_LINE_CHARS) sb.append(c.toChar()) else cut = true
+                }
+                if (c < 0 && !any) break
+                val line = if (cut) sb.toString() + "  ...[line cut]" else sb.toString()
+                if (!visit(line)) return
+                if (c < 0) break
+            }
+        }
+    }
 
     /** Kills the command if it runs longer than [seconds]. */
     private fun startWatchdog(process: Process, seconds: Long) {
@@ -1313,15 +1344,14 @@ class MainActivity : ComponentActivity() {
         val rx = Regex("L[A-Za-z0-9_\\$/]+;")
         var total = 0
         val picked = ArrayList<String>()
-        file.useLines { seq ->
-            seq.forEach { line ->
-                total++
-                if (picked.size < MAX_PICK) {
-                    picked += rx.replace(line) { m ->
-                        try { Converter.smaliToJava(m.value) } catch (e: Exception) { m.value }
-                    }
+        forEachLine(file) { line ->
+            total++
+            if (picked.size < MAX_PICK) {
+                picked += rx.replace(line) { m ->
+                    try { Converter.smaliToJava(m.value) } catch (e: Exception) { m.value }
                 }
             }
+            true
         }
         showFiltered(picked, total, "translated to Java names")
     }
@@ -1654,6 +1684,7 @@ class MainActivity : ComponentActivity() {
         private val DEX_NAME = Regex("classes\\d*\\.dex")
         /** Lines shown on screen at once; the full output stays in a file. */
         private const val DISPLAY_LINES = 3_000
+        private const val MAX_LINE_CHARS = 4_000
         /** Hard cap on one radare2 run's output file. */
         private const val MAX_OUTPUT_BYTES = 512L * 1024 * 1024
         private const val MAX_PICK = 200_000
