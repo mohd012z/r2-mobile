@@ -62,7 +62,7 @@ object Catalog {
             "Long output is cut to the last lines the viewer shows.")
         add("Strings", "Readable text, whole file (r2 izz)", Action.R2, "izz", EVERYTHING,
             "Like function 9 but searches the whole file. Slower. Use it when 9 finds too little.")
-        add("Analysis", "Auto-analyze everything (r2 aaa)", Action.R2, "aaa", BINARY,
+        add("Analysis", "Auto-analyze, fast (r2 aa)", Action.R2, "aa", BINARY,
             "Asks radare2 to find functions, calls and references. Needed before functions 12 to 14 on stripped files. " +
             "Big files can take a minute. Wait until the output stops.")
         add("Analysis", "List functions (r2 afl)", Action.R2, "afl", BINARY,

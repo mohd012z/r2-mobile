@@ -14,6 +14,9 @@ import android.view.View
  * Command-prompt style console: every piece of text has a colour, so commands, output,
  * addresses, errors and advice are easy to tell apart. Only use from the UI thread.
  */
+/** Longest line the console draws. The full line stays in the output file for search and paging. */
+private const val MAX_SHOWN_CHARS = 2_000
+
 class Console(private val maxChars: Int = 1_000_000) {
 
     enum class Style(val hex: String, val bold: Boolean = false) {
@@ -64,7 +67,12 @@ class Console(private val maxChars: Int = 1_000_000) {
      * Disassembly lines are coloured by kind: loop, forward branch, same-block jump, call, return.
      */
     fun writeOutput(text: String, onAddress: (String) -> Unit = {}) {
-        text.trimEnd('\n').lines().forEach { line ->
+        text.trimEnd('\n').lines().forEach { raw ->
+            val line = if (raw.length > MAX_SHOWN_CHARS) {
+                raw.substring(0, MAX_SHOWN_CHARS) + "  ...[cut: ${raw.length} characters. Type  only WORD  to find it]"
+            } else {
+                raw
+            }
             val style = lineStyle(line)
             var last = 0
             addressRx.findAll(line).forEach { m ->
