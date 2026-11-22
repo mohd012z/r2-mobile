@@ -88,6 +88,7 @@ class MainActivity : ComponentActivity() {
         outputText.movementMethod = LinkMovementMethod.getInstance()
 
         findViewById<Button>(R.id.runButton).setOnClickListener { runTyped() }
+        findViewById<Button>(R.id.functionsPickButton).setOnClickListener { showFunctionMenu() }
         findViewById<Button>(R.id.fileMenuButton).setOnClickListener { dropdown(it, fileMenu()) }
         findViewById<Button>(R.id.runMenuButton).setOnClickListener { dropdown(it, runMenu()) }
         findViewById<Button>(R.id.findMenuButton).setOnClickListener { dropdown(it, findMenu()) }

@@ -26,12 +26,27 @@
                 android:inputType="text"
                 android:singleLine="true" />
 
-            <Button
-                android:id="@+id/runButton"
-                style="@style/CompactButton"
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Run" />
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/runButton"
+                    style="@style/CompactButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Run" />
+
+                <Button
+                    android:id="@+id/functionsPickButton"
+                    style="@style/CompactButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Functions ▼" />
+            </LinearLayout>
 
             <LinearLayout
                 android:layout_width="match_parent"

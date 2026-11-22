@@ -78,6 +78,15 @@
             android:paddingLeft="14dp"
             android:paddingRight="14dp"
             android:text="Run" />
+
+        <Button
+            android:id="@+id/functionsPickButton"
+            style="@style/CompactButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingLeft="14dp"
+            android:paddingRight="14dp"
+            android:text="Functions ▼" />
     </LinearLayout>
 
     <!-- Four categories. Each opens a dropdown list of its actions. -->
