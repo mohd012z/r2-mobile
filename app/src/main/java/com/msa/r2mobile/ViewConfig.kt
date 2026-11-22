@@ -123,7 +123,10 @@ object ViewConfig {
      * Defaults resets every value to the built-in default and saves it.
      */
     fun dialog(ctx: Context, onChanged: () -> Unit) {
-        val before = listOf(fontIndex, themeIndex, consoleBgHex, consoleFgHex)
+        val beforeFont = fontIndex
+        val beforeTheme = themeIndex
+        val beforeBg = consoleBgHex
+        val beforeFg = consoleFgHex
         val beforeSizes = listOf(fileText, consoleText, buttonText)
         val beforeFlags = listOf(showHidden, sideBySide)
 
@@ -187,10 +190,10 @@ object ViewConfig {
                 onChanged()
             }
             .setNegativeButton("Cancel") { _, _ ->
-                fontIndex = before[0]
-                themeIndex = before[1]
-                consoleBgHex = before[2]
-                consoleFgHex = before[3]
+                fontIndex = beforeFont
+                themeIndex = beforeTheme
+                consoleBgHex = beforeBg
+                consoleFgHex = beforeFg
                 fileText = beforeSizes[0]
                 consoleText = beforeSizes[1]
                 buttonText = beforeSizes[2]
