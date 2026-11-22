@@ -4,13 +4,10 @@ import android.app.AlertDialog
 import android.content.Context
 import android.graphics.Color
 import android.graphics.Typeface
-import android.text.Editable
-import android.text.TextWatcher
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.CheckBox
-import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.SeekBar
@@ -152,11 +149,9 @@ object ViewConfig {
         box.addView(fontButton)
         box.addView(themeButton)
 
-        box.addView(heading(ctx, "Console colours (hex code, e.g. #0B0F14)"))
-        box.addView(TextView(ctx).apply { text = "Background" })
-        box.addView(hexBox(ctx, consoleBgHex) { consoleBgHex = it })
-        box.addView(TextView(ctx).apply { text = "Text" })
-        box.addView(hexBox(ctx, consoleFgHex) { consoleFgHex = it })
+        box.addView(heading(ctx, "Console colours (tap a colour to pick it)"))
+        box.addView(colourRow(ctx, "Background", consoleBgHex) { consoleBgHex = it })
+        box.addView(colourRow(ctx, "Text", consoleFgHex) { consoleFgHex = it })
 
         box.addView(heading(ctx, "Console"))
         box.addView(slider(ctx, "Console text", consoleText, 8, 24) { consoleText = it })
@@ -204,24 +199,100 @@ object ViewConfig {
             .show()
     }
 
-    /** A box for a colour code. Only a valid #RRGGBB code is kept; anything else shows an error. */
-    private fun hexBox(ctx: Context, initial: String, set: (String) -> Unit): EditText = EditText(ctx).apply {
-        setText(initial)
-        hint = "#RRGGBB"
-        setSingleLine(true)
-        addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-            override fun afterTextChanged(s: Editable?) {
-                val v = s?.toString()?.trim().orEmpty()
-                if (isHex(v)) {
-                    set(v)
-                    setError(null)
-                } else {
-                    setError("use #RRGGBB, for example #0B0F14")
-                }
+    /** A row with a colour swatch and its name. Tapping the swatch opens the colour picker. */
+    private fun colourRow(ctx: Context, label: String, current: String, set: (String) -> Unit): LinearLayout {
+        var value = current
+        val swatch = View(ctx)
+        val name = TextView(ctx)
+        fun show() {
+            swatch.setBackgroundColor(parseHex(value, DEFAULT_CONSOLE_BG))
+            name.text = "$label: $value"
+        }
+        show()
+        swatch.setOnClickListener {
+            pickColour(ctx, label, value) { picked ->
+                value = picked
+                set(picked)
+                show()
             }
-        })
+        }
+        return LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, 6, 0, 6)
+            addView(swatch, LinearLayout.LayoutParams(72, 72).apply { rightMargin = 24 })
+            addView(name, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        }
+    }
+
+    /** Colour picker: preset colours, red/green/blue sliders and a live preview. Returns #RRGGBB. */
+    private fun pickColour(ctx: Context, title: String, initial: String, onPicked: (String) -> Unit) {
+        val start = parseHex(initial, DEFAULT_CONSOLE_BG)
+        val red = (start shr 16) and 0xFF
+        val green = (start shr 8) and 0xFF
+        val blue = start and 0xFF
+        val preview = View(ctx)
+        val code = TextView(ctx).apply { textSize = 14f; setTypeface(Typeface.MONOSPACE, Typeface.BOLD) }
+        val rgb = IntArray(3) { listOf(red, green, blue)[it] }
+        fun hexNow() = String.format("#%02X%02X%02X", rgb[0], rgb[1], rgb[2])
+        fun refresh() {
+            preview.setBackgroundColor(Color.rgb(rgb[0], rgb[1], rgb[2]))
+            code.text = hexNow()
+        }
+        val box = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(48, 16, 48, 0)
+        }
+        box.addView(preview, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 160))
+        box.addView(code)
+
+        // Presets: tap one to use it directly.
+        val presets = listOf(
+            "#000000", "#0B0F14", "#1E1E1E", "#2D2D2D", "#FFFFFF", "#C9D1D9",
+            "#00FF41", "#39FF14", "#FFB000", "#00E5FF", "#FF5555", "#FFD700"
+        )
+        val grid = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
+        presets.chunked(6).forEach { row ->
+            val line = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
+            row.forEach { hex ->
+                line.addView(View(ctx).apply {
+                    setBackgroundColor(parseHex(hex, DEFAULT_CONSOLE_BG))
+                    setOnClickListener {
+                        val c = parseHex(hex, DEFAULT_CONSOLE_BG)
+                        rgb[0] = (c shr 16) and 0xFF
+                        rgb[1] = (c shr 8) and 0xFF
+                        rgb[2] = c and 0xFF
+                        refresh()
+                    }
+                }, LinearLayout.LayoutParams(0, 64, 1f).apply { setMargins(4, 4, 4, 4) })
+            }
+            grid.addView(line)
+        }
+        box.addView(grid)
+
+        val names = listOf("Red", "Green", "Blue")
+        names.forEachIndexed { i, n ->
+            box.addView(TextView(ctx).apply { text = n; setPadding(0, 16, 0, 0) })
+            box.addView(SeekBar(ctx).apply {
+                max = 255
+                progress = rgb[i]
+                setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(sb: SeekBar?, p: Int, fromUser: Boolean) {
+                        rgb[i] = p
+                        refresh()
+                    }
+                    override fun onStartTrackingTouch(sb: SeekBar?) {}
+                    override fun onStopTrackingTouch(sb: SeekBar?) {}
+                })
+            })
+        }
+        refresh()
+
+        AlertDialog.Builder(ctx)
+            .setTitle(title)
+            .setView(ScrollView(ctx).apply { addView(box) })
+            .setPositiveButton("Use this colour") { _, _ -> onPicked(hexNow()) }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun heading(ctx: Context, text: String): TextView = TextView(ctx).apply {
