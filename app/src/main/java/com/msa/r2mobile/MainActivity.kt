@@ -525,6 +525,8 @@ class MainActivity : ComponentActivity() {
             Action.R2_BLOCKS -> runBlocks(next)
             Action.R2_REFERENCE -> showReference()
             Action.TROUBLESHOOT -> troubleshoot()
+            Action.NATIVE_EXTRACT_SO -> background(next) { extractSo(target) }
+            Action.NATIVE_SUGGEST -> runR2("iS;ii;izz", next, onDone = { analyseSo() })
         }
     }
 
@@ -588,7 +590,7 @@ class MainActivity : ComponentActivity() {
                 val head = if (lineCount == 0 || onDone != null) "" else displayHead(outFile)
                 ui {
                     if (onDone != null) {
-                        write(Console.Style.INFO, "(building the diagram from this data, not shown raw)")
+                        write(Console.Style.INFO, "(read by the app, not shown raw)")
                     } else if (lineCount == 0) {
                         write(Console.Style.INFO, "(no output)")
                     } else {
@@ -925,6 +927,85 @@ class MainActivity : ComponentActivity() {
                 say(Console.Style.INFO, "target is now classes.dex. Functions 2 to 19 work on it.")
             }
         }
+    }
+
+    /** Extracts the native library from an APK. Prefers arm64-v8a; the largest library becomes the target. */
+    private fun extractSo(path: String) {
+        val outDir = File(filesDir, "extracted/so").apply { mkdirs() }
+        ZipFile(File(path)).use { zf ->
+            val all = Collections.list(zf.entries()).filter {
+                !it.isDirectory && it.name.startsWith("lib/") && it.name.endsWith(".so") && it.size <= MAX_SO_BYTES
+            }
+            if (all.isEmpty()) {
+                say(Console.Style.WARN, "No native libraries (lib/*/*.so) in this file.")
+                advice("only APKs with a lib/ folder have them. For a .so file, open it directly with FILE > Open a file.")
+                return@use
+            }
+            val arm = all.filter { it.name.startsWith("lib/arm64-v8a/") }
+            if (arm.isEmpty()) say(Console.Style.WARN, "No arm64-v8a library. Using the other ABIs.")
+            val written = (arm.ifEmpty { all }).map { e ->
+                val out = File(outDir, e.name.replace('/', '_'))
+                zf.getInputStream(e).use { input -> out.outputStream().use { input.copyTo(it) } }
+                say(Console.Style.OK, "extracted ${e.name} (${out.length()} bytes)")
+                out
+            }
+            val main = written.maxByOrNull { it.length() } ?: return@use
+            targetPath = main.absolutePath
+            loadedName = main.name
+            loaded = FileCategory.ELF_SHARED
+            filter = FileCategory.ELF_SHARED
+            say(Console.Style.INFO, "target is now ${main.name} (the largest library).")
+            advice("type 31 for suggestions on what to modify, or 2 to 19 for the radare2 functions.")
+        }
+    }
+
+    /**
+     * Turns the output of  iS;ii;izz  into suggestions: writable and executable sections, the imported
+     * calls, and readable strings with their addresses. Only suggests; it never changes the file.
+     */
+    private fun analyseSo() {
+        val file = lastOutput ?: return
+        val sections = mutableListOf<String>()
+        val imports = mutableListOf<String>()
+        val texts = mutableListOf<String>()
+        val permRx = Regex("perm=([-rwx]+)")
+        val nameRx = Regex("name=(\\S*)")
+        val vaddrRx = Regex("vaddr=(0x[0-9a-fA-F]+)")
+        val strRx = Regex("string=(.*)$")
+        forEachLine(file) { line ->
+            when {
+                line.contains("string=") -> if (texts.size < 12) {
+                    val addr = vaddrRx.find(line)?.groupValues?.get(1)
+                    val text = strRx.find(line)?.groupValues?.get(1)?.take(80)
+                    if (addr != null && !text.isNullOrBlank()) texts += "$addr  \"$text\""
+                }
+                line.contains("bind=") -> if (imports.size < 20) {
+                    nameRx.find(line)?.groupValues?.get(1)?.takeIf { it.isNotBlank() }?.let { imports += it }
+                }
+                line.contains("perm=") -> {
+                    val perm = permRx.find(line)?.groupValues?.get(1).orEmpty()
+                    if (perm.contains('w') && perm.contains('x')) {
+                        sections += nameRx.find(line)?.groupValues?.get(1)?.ifEmpty { "(unnamed)" } ?: "(unnamed)"
+                    }
+                }
+            }
+            true
+        }
+        val lines = mutableListOf<Pair<Console.Style, String>>()
+        lines += Console.Style.HEADER to "SUGGESTIONS FOR ${loadedName ?: "the library"} (review before you change anything)"
+        lines += Console.Style.INFO to "1. Writable and executable sections: " +
+            (if (sections.isEmpty()) "none found, so the code cannot be changed in place." else sections.joinToString())
+        lines += Console.Style.INFO to "   Change bytes only in these, with EDIT mode. Keep the same number of bytes."
+        lines += Console.Style.INFO to "2. Imported calls to review: " +
+            (if (imports.isEmpty()) "none listed (the library may be stripped)." else imports.joinToString())
+        lines += Console.Style.INFO to "   To see who calls one, type  find NAME  then tap the address shown."
+        lines += Console.Style.INFO to "3. Readable text you could change (same length or shorter):"
+        if (texts.isEmpty()) lines += Console.Style.INFO to "   none found."
+        texts.forEach { lines += Console.Style.INFO to "   $it" }
+        lines += Console.Style.INFO to "4. Before any change: keep the original file. Edits are written to a copy, never over the original."
+        lines += Console.Style.WARN to "Only change libraries you built or have permission to modify."
+        ui { lines.forEach { (style, text) -> write(style, text) } }
+        advice("tap an address above to read the code, then EDIT mode to change bytes. Type  s ENTRY;pdc  for the entry code.")
     }
 
     private fun decodeManifest(path: String) {
@@ -1685,6 +1766,7 @@ class MainActivity : ComponentActivity() {
         /** Lines shown on screen at once; the full output stays in a file. */
         private const val DISPLAY_LINES = 3_000
         private const val MAX_LINE_CHARS = 4_000
+        private const val MAX_SO_BYTES = 256L * 1024 * 1024
         /** Hard cap on one radare2 run's output file. */
         private const val MAX_OUTPUT_BYTES = 512L * 1024 * 1024
         private const val MAX_PICK = 200_000

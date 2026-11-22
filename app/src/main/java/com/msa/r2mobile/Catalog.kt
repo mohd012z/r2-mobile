@@ -4,6 +4,7 @@ package com.msa.r2mobile
 enum class Action {
     R2, NATIVE_INFO, NATIVE_ZIP_LIST, NATIVE_EXTRACT_DEX, NATIVE_MANIFEST,
     NATIVE_ENCRYPT, NATIVE_DECRYPT, NATIVE_PATCH, GUIDE, R2_BLOCKS, R2_REFERENCE, TROUBLESHOOT,
+    NATIVE_EXTRACT_SO, NATIVE_SUGGEST,
 }
 
 /**
@@ -117,6 +118,14 @@ object Catalog {
         add("Help", "Troubleshoot: check the engine, file and storage", Action.TROUBLESHOOT, "", EVERYTHING,
             "Runs a checklist: is the radare2 engine in the app, does it start, is a file loaded, can radare2 read it, " +
             "is there free storage. Each failed check says what to do. Use it when a function does not work.")
+        add("APK", "Extract a native library (.so) from the APK", Action.NATIVE_EXTRACT_SO, "", setOf(FileCategory.APK),
+            "Pulls the native library (lib/arm64-v8a/*.so, or another ABI if arm64 is missing) out of the APK. " +
+            "The largest one becomes the target, so the radare2 functions and EDIT mode work on it. " +
+            "Use it on your own apps or libraries.")
+        add("Modify", "Suggest what to modify in this .so", Action.NATIVE_SUGGEST, "", setOf(FileCategory.ELF_SHARED),
+            "Reads the library's sections, imported calls and readable strings, then suggests where a change is " +
+            "possible: writable and executable sections, the calls to review, and the text you can change. " +
+            "It only suggests. Nothing is written until you use EDIT mode, and changes go to a copy.")
     }
 
     val all: List<Feature> get() = list
