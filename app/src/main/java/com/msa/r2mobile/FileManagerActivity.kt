@@ -3,6 +3,7 @@ package com.msa.r2mobile
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
+import android.graphics.Color
 import android.graphics.Typeface
 import android.net.Uri
 import android.os.Bundle
@@ -21,16 +22,14 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.core.content.FileProvider
 import java.io.File
-import java.util.Collections
 import java.util.concurrent.Executors
-import java.util.zip.ZipEntry
-import java.util.zip.ZipFile
-import java.util.zip.ZipOutputStream
 
 /**
- * Dual-pane file manager. Two folder lists sit side by side (or stacked, see View settings).
- * Select files, copy/cut/paste, rename, delete, share, zip/unzip, encrypt/decrypt, search,
- * and send a file to the R2 console. Pinch on the panes to change the text size.
+ * Dual-pane file manager. Two folder panes, side by side or stacked (View settings).
+ * Each pane is limited to one storage place, so "up" never leaves it. Storage places:
+ * internal shared storage (/storage/emulated/0), the app's private folder, and any SD card.
+ * Mark files, then copy, move, paste, rename, delete, share, compress, extract, encrypt,
+ * decrypt, search, view or send to the R2 console.
  */
 class FileManagerActivity : Activity() {
 
@@ -39,9 +38,12 @@ class FileManagerActivity : Activity() {
         private const val MAX_SEARCH = 5_000
     }
 
-    /** One folder pane: its header, its list, and the files the user has marked. */
-    private inner class Pane(start: File) {
-        var dir: File = start
+    /** One place a pane can browse: a label for the user and the folder it starts from. */
+    private data class Storage(val label: String, val dir: File)
+
+    /** One folder pane. [top] is the storage place it may not leave. */
+    private inner class Pane(var top: File, var topLabel: String) {
+        var dir: File = top
         val marked = LinkedHashSet<File>()
         /** Search results shown instead of the folder, or null when browsing. */
         var search: List<File>? = null
@@ -49,9 +51,7 @@ class FileManagerActivity : Activity() {
 
         private val header = TextView(this@FileManagerActivity).apply {
             textSize = 12f
-            setPadding(10, 8, 10, 8)
-            setBackgroundColor(0xFF1E2A36.toInt())
-            setTextColor(0xFFD4D4D4.toInt())
+            setPadding(14, 10, 14, 10)
         }
 
         private val adapter = object : ArrayAdapter<String>(
@@ -59,15 +59,25 @@ class FileManagerActivity : Activity() {
         ) {
             override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
                 val v = super.getView(position, convertView, parent) as TextView
+                val p = ViewConfig.palette()
+                val f = rows.getOrNull(position)
                 v.textSize = ViewConfig.fileText
-                v.typeface = ViewConfig.typeface()
-                v.setTextColor(ViewConfig.palette().text)
+                v.typeface = if (f != null && f.isDirectory) {
+                    Typeface.create(ViewConfig.typeface(), Typeface.BOLD)
+                } else {
+                    ViewConfig.typeface()
+                }
+                v.setTextColor(p.text)
+                v.setPadding(16, 12, 16, 12)
+                v.setBackgroundColor(if (f != null && f in marked) p.mark else Color.TRANSPARENT)
                 return v
             }
         }
 
         private val list = ListView(this@FileManagerActivity).apply {
             adapter = this@Pane.adapter
+            setDivider(android.graphics.drawable.ColorDrawable(0x33FFFFFF))
+            dividerHeight = 1
             setOnItemClickListener { _, _, pos, _ ->
                 active = this@Pane
                 if (pos >= rows.size) return@setOnItemClickListener
@@ -91,14 +101,25 @@ class FileManagerActivity : Activity() {
             addView(list, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
         }
 
+        private fun inside(d: File): Boolean {
+            val p = d.canonicalPath
+            val t = top.canonicalPath
+            return p == t || p.startsWith(t + File.separator)
+        }
+
         fun go(d: File) {
-            dir = d
+            dir = if (inside(d)) d else top
             search = null
             marked.clear()
             refresh()
         }
 
+        /** Goes up one folder, but never above the storage place this pane was opened on. */
         fun goUp() {
+            if (dir.canonicalPath == top.canonicalPath) {
+                toast("this is the top of $topLabel. Use Actions > Storage to switch place.")
+                return
+            }
             dir.parentFile?.let { go(it) }
         }
 
@@ -107,7 +128,7 @@ class FileManagerActivity : Activity() {
             refresh()
         }
 
-        /** Files and folders currently listed, without the ".." row. */
+        /** Files and folders listed now, without the ".." row. */
         fun visible(): List<File> = rows.filterNotNull()
 
         fun refresh() {
@@ -119,25 +140,30 @@ class FileManagerActivity : Activity() {
                     ?.filter { ViewConfig.showHidden || !it.name.startsWith(".") }
                     ?.sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() }))
                     ?: emptyList()
-                (if (dir.parentFile != null) listOf<File?>(null) else emptyList()) + kids
+                (if (dir.canonicalPath != top.canonicalPath) listOf<File?>(null) else emptyList()) + kids
             }
             adapter.clear()
             adapter.addAll(rows.map { label(it, results != null) })
             adapter.notifyDataSetChanged()
-            val mode = if (results != null) "SEARCH: ${results.size} found under ${dir.name}" else dir.absolutePath
-            val readable = if (dir.canRead() || results != null) "" else "  (cannot read: Android blocks this folder)"
-            header.text = "$mode$readable   marked: ${marked.size}"
+
             val p = ViewConfig.palette()
             header.setBackgroundColor(p.header)
             header.setTextColor(p.text)
             list.setBackgroundColor(p.bg)
+            header.text = if (results != null) {
+                "SEARCH in $topLabel: ${results.size} found   marked ${marked.size}"
+            } else {
+                val rel = dir.absolutePath.removePrefix(top.absolutePath).ifEmpty { "/" }
+                val blocked = if (dir.canRead()) "" else "   (Android blocks this folder)"
+                "$topLabel  $rel$blocked   marked ${marked.size}"
+            }
         }
 
         private fun label(f: File?, searching: Boolean): String {
-            if (f == null) return "[..] parent folder"
+            if (f == null) return "..  (parent folder)"
             val mark = if (f in marked) "✔ " else ""
-            val name = if (searching) f.absolutePath.removePrefix(dir.absolutePath + File.separator) else f.name
-            return if (f.isDirectory) "$mark[DIR] $name" else "$mark$name   ${humanSize(f.length())}"
+            val name = if (searching) f.absolutePath.removePrefix(top.absolutePath + File.separator) else f.name
+            return if (f.isDirectory) "$mark$name" else "$mark$name   ${humanSize(f.length())}"
         }
     }
 
@@ -149,14 +175,15 @@ class FileManagerActivity : Activity() {
     private var clipMove = false
     private lateinit var root: LinearLayout
     private lateinit var detector: ScaleGestureDetector
-    /** Zip, encrypt, decrypt and search run here so large files do not freeze the screen. */
+    /** Zip, encrypt, decrypt, search and copy run here so big files do not freeze the screen. */
     private val worker = Executors.newSingleThreadExecutor()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         ViewConfig.load(this)
-        left = Pane(getExternalFilesDir(null) ?: filesDir)
-        right = Pane(filesDir)
+        val first = storages().first()
+        left = Pane(first.dir, first.label)
+        right = Pane(filesDir, "App private folder")
         active = left
         detector = ScaleGestureDetector(this, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
             override fun onScale(d: ScaleGestureDetector): Boolean {
@@ -182,32 +209,79 @@ class FileManagerActivity : Activity() {
         super.onDestroy()
     }
 
-    /** Pinch zoom is read here, before the lists get the touch, so it works anywhere on the screen. */
+    /** Pinch zoom is read here first, so it works anywhere on the screen. */
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
         detector.onTouchEvent(ev)
         return super.dispatchTouchEvent(ev)
     }
 
+    /** Storage places this phone shows: shared internal, app private, and any SD card. */
+    private fun storages(): List<Storage> {
+        val list = mutableListOf<Storage>()
+        val shared = File("/storage/emulated/0")
+        if (shared.isDirectory) list += Storage("Internal storage (phone shared)", shared)
+        list += Storage("App private folder", filesDir)
+        getExternalFilesDir(null)?.let { list += Storage("App folder on shared storage", it) }
+        File("/storage").listFiles()
+            ?.filter { it.isDirectory && it.name != "emulated" && it.name != "self" }
+            ?.forEach { list += Storage("External storage / SD card (${it.name})", it) }
+        return list
+    }
+
+    private fun chooseStorage() {
+        val p = active ?: return
+        val list = storages()
+        AlertDialog.Builder(this)
+            .setTitle("Storage for this pane")
+            .setMessage(
+                "Internal storage: the phone's own shared storage (Download, DCIM, Documents).\n" +
+                    "App private folder: only this app can see it.\n" +
+                    "External storage / SD card: a memory card, if one is inserted."
+            )
+            .setItems(list.map { it.label }.toTypedArray()) { _, i ->
+                p.top = list[i].dir
+                p.topLabel = list[i].label
+                p.go(list[i].dir)
+            }
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
+    private fun detach(v: View) {
+        (v.parent as? ViewGroup)?.removeView(v)
+    }
+
+    private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
+
     private fun buildLayout() {
         root.removeAllViews()
         root.setBackgroundColor(ViewConfig.palette().bg)
-        val sideBySide = ViewConfig.sideBySide
+        detach(left.root)
+        detach(right.root)
+        val side = ViewConfig.sideBySide
         val panes = LinearLayout(this).apply {
-            orientation = if (sideBySide) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
+            orientation = if (side) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
         }
-        val paneParams = if (sideBySide) {
+        val paneParams = if (side) {
             LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
         } else {
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)
         }
+        val divider = View(this).apply { setBackgroundColor(0xFF3A4654.toInt()) }
+        val dividerParams = if (side) {
+            LinearLayout.LayoutParams(dp(3), LinearLayout.LayoutParams.MATCH_PARENT)
+        } else {
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(3))
+        }
         panes.addView(left.root, paneParams)
+        panes.addView(divider, dividerParams)
         panes.addView(right.root, paneParams)
         root.addView(panes, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
         root.addView(buttonRow(
+            "Copy >" to { transfer(move = false) },
+            "Move >" to { transfer(move = true) },
+            "Delete" to { deleteMarked() },
             "Actions" to { showActions() },
-            "Search" to { searchDialog() },
-            "Open in R2" to { openInR2() },
-            "Settings" to { ViewConfig.dialog(this) { buildLayout() } },
         ))
         refreshBoth()
     }
@@ -247,11 +321,12 @@ class FileManagerActivity : Activity() {
 
     private fun showActions() {
         val items: List<Pair<String, () -> Unit>> = listOf(
+            "Storage for this pane (internal, app, SD card)" to { chooseStorage() },
             "Select all in this pane" to { active?.let { it.marked.addAll(it.visible()); refreshBoth() } },
             "Clear marks" to { active?.marked?.clear(); refreshBoth() },
-            "Copy marked" to { prepare(move = false) },
-            "Cut marked (moves on paste)" to { prepare(move = true) },
-            "Paste here" to { paste() },
+            "Copy marked (then Paste here)" to { prepare(move = false) },
+            "Cut marked (then Paste here)" to { prepare(move = true) },
+            "Paste here" to { active?.let { paste(it.dir) } },
             "Share marked" to { share() },
             "Rename (one item)" to { rename() },
             "New folder" to { newFolder() },
@@ -260,7 +335,9 @@ class FileManagerActivity : Activity() {
             "View file (text or hex)" to { viewFile() },
             "Encrypt marked files (password)" to { encryptMarked() },
             "Decrypt .r2enc files (password)" to { decryptMarked() },
-            "Delete marked" to { deleteMarked() },
+            "Search in this pane" to { searchDialog() },
+            "Open in R2 console (one file)" to { openInR2() },
+            "Settings: text, buttons, layout" to { ViewConfig.dialog(this) { buildLayout() } },
             "Refresh" to { refreshBoth() },
         )
         AlertDialog.Builder(this)
@@ -270,18 +347,28 @@ class FileManagerActivity : Activity() {
             .show()
     }
 
+    /** Copy or Move the marked files from the active pane into the other pane. */
+    private fun transfer(move: Boolean) {
+        val from = active ?: return
+        val files = targets() ?: return
+        val to = other(from)
+        clipboard.clear()
+        clipboard += files
+        clipMove = move
+        paste(to.dir)
+    }
+
     private fun prepare(move: Boolean) {
         val files = targets() ?: return
         clipboard.clear()
         clipboard += files
         clipMove = move
-        toast("${files.size} item(s) ready. Open the other or this pane and choose Paste here.")
+        toast("${files.size} item(s) ready. Open the folder you want and choose Paste here.")
     }
 
-    private fun paste() {
-        val dest = active?.dir ?: return
+    private fun paste(dest: File) {
         if (clipboard.isEmpty()) {
-            toast("nothing copied or cut yet.")
+            toast("nothing copied or moved yet.")
             return
         }
         worker.execute {
@@ -310,7 +397,7 @@ class FileManagerActivity : Activity() {
             if (clipMove) clipboard.clear()
             runOnUiThread {
                 active?.marked?.clear()
-                toast("pasted $done item(s)")
+                toast("${if (clipMove) "moved" else "copied"} $done item(s)")
                 refreshBoth()
             }
         }
@@ -620,7 +707,7 @@ class FileManagerActivity : Activity() {
             inputType = InputType.TYPE_CLASS_TEXT
         }
         AlertDialog.Builder(this)
-            .setTitle("Search in ${p.dir.name}")
+            .setTitle("Search in ${p.topLabel}")
             .setMessage("Looks at file and folder names, including subfolders. Press Refresh to leave the results.")
             .setView(box)
             .setPositiveButton("Search") { _, _ ->

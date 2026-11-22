@@ -8,35 +8,41 @@ import android.view.ViewGroup
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.SeekBar
 import android.widget.TextView
 
 /**
- * View template: font, colour template, text sizes, hidden files and the pane layout.
+ * View template: font, colour template, text sizes, hidden files and the pane split.
  * Saved on this device and shared by the console and the file manager.
  */
 object ViewConfig {
     private const val PREFS = "r2_view_config"
+
+    const val DEFAULT_FILE = 14f
+    const val DEFAULT_CONSOLE = 12f
+    const val DEFAULT_BUTTON = 12f
 
     val FONT_NAMES = listOf("Monospace", "Sans-serif", "Serif")
     val THEME_NAMES = listOf("Dark", "Light", "Green terminal", "Blue")
 
     var fontIndex = 0
     var themeIndex = 0
-    var fileText = 15f
-    var consoleText = 12f
-    var buttonText = 13f
+    var fileText = DEFAULT_FILE
+    var consoleText = DEFAULT_CONSOLE
+    var buttonText = DEFAULT_BUTTON
     var showHidden = true
+    /** true = panes side by side with a vertical divider; false = stacked with a horizontal divider. */
     var sideBySide = true
 
-    /** Colours of one template: panel background, text, and header bar. */
-    data class Palette(val bg: Int, val text: Int, val header: Int)
+    /** Colours of one template: panel background, text, header bar, and the highlight for marked rows. */
+    data class Palette(val bg: Int, val text: Int, val header: Int, val mark: Int)
 
     fun palette(): Palette = when (themeIndex) {
-        1 -> Palette(0xFFF5F7FA.toInt(), 0xFF101418.toInt(), 0xFFDDE3EA.toInt())
-        2 -> Palette(0xFF050A05.toInt(), 0xFF39FF14.toInt(), 0xFF0E1F0E.toInt())
-        3 -> Palette(0xFF0B1A2E.toInt(), 0xFFBBD7FF.toInt(), 0xFF16304F.toInt())
-        else -> Palette(0xFF0B0F14.toInt(), 0xFFD4D4D4.toInt(), 0xFF1E2A36.toInt())
+        1 -> Palette(0xFFF5F7FA.toInt(), 0xFF101418.toInt(), 0xFFDDE3EA.toInt(), 0x552979FF)
+        2 -> Palette(0xFF050A05.toInt(), 0xFF39FF14.toInt(), 0xFF0E1F0E.toInt(), 0x5539FF14)
+        3 -> Palette(0xFF0B1A2E.toInt(), 0xFFBBD7FF.toInt(), 0xFF16304F.toInt(), 0x5500B8D4)
+        else -> Palette(0xFF0B0F14.toInt(), 0xFFD4D4D4.toInt(), 0xFF1E2A36.toInt(), 0x552979FF)
     }
 
     fun typeface(): Typeface = when (fontIndex) {
@@ -45,13 +51,23 @@ object ViewConfig {
         else -> Typeface.MONOSPACE
     }
 
+    fun resetDefaults() {
+        fontIndex = 0
+        themeIndex = 0
+        fileText = DEFAULT_FILE
+        consoleText = DEFAULT_CONSOLE
+        buttonText = DEFAULT_BUTTON
+        showHidden = true
+        sideBySide = true
+    }
+
     fun load(ctx: Context) {
         val p = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         fontIndex = p.getInt("font", 0)
         themeIndex = p.getInt("theme", 0)
-        fileText = p.getFloat("file", 15f)
-        consoleText = p.getFloat("console", 12f)
-        buttonText = p.getFloat("button", 13f)
+        fileText = p.getFloat("file", DEFAULT_FILE)
+        consoleText = p.getFloat("console", DEFAULT_CONSOLE)
+        buttonText = p.getFloat("button", DEFAULT_BUTTON)
         showHidden = p.getBoolean("hidden", true)
         sideBySide = p.getBoolean("side", true)
     }
@@ -76,14 +92,18 @@ object ViewConfig {
         }
     }
 
-    /** Opens the settings dialog. Save keeps the changes; Cancel restores the previous ones. */
+    /**
+     * Opens the settings dialog. Save keeps the changes, Cancel restores the previous ones,
+     * Defaults resets every value to the built-in default and saves it.
+     */
     fun dialog(ctx: Context, onChanged: () -> Unit) {
-        val before = listOf(fontIndex, themeIndex)
+        val beforeChoice = listOf(fontIndex, themeIndex)
         val beforeSizes = listOf(fileText, consoleText, buttonText)
         val beforeFlags = listOf(showHidden, sideBySide)
+
         val box = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(48, 16, 48, 0)
+            setPadding(48, 8, 48, 0)
         }
         val fontButton = Button(ctx)
         val themeButton = Button(ctx)
@@ -98,31 +118,45 @@ object ViewConfig {
         themeButton.setOnClickListener {
             choose(ctx, "Colour template", THEME_NAMES, themeIndex) { themeIndex = it; refreshChoiceButtons() }
         }
+
+        box.addView(heading(ctx, "Appearance (console and file manager)"))
         box.addView(fontButton)
         box.addView(themeButton)
-        box.addView(slider(ctx, "File list text", fileText, 9, 32) { fileText = it })
+
+        box.addView(heading(ctx, "Console"))
         box.addView(slider(ctx, "Console text", consoleText, 8, 24) { consoleText = it })
-        box.addView(slider(ctx, "Button text", buttonText, 10, 22) { buttonText = it })
+
+        box.addView(heading(ctx, "Buttons"))
+        box.addView(slider(ctx, "Button text", buttonText, 9, 20) { buttonText = it })
+
+        box.addView(heading(ctx, "File manager"))
+        box.addView(slider(ctx, "File list text", fileText, 9, 32) { fileText = it })
         box.addView(CheckBox(ctx).apply {
             text = "Show hidden files (names starting with a dot)"
             isChecked = showHidden
             setOnCheckedChangeListener { _, c -> showHidden = c }
         })
         box.addView(CheckBox(ctx).apply {
-            text = "Two panes side by side (off = stacked)"
+            text = "Vertical split: panes side by side (off = horizontal split, stacked)"
             isChecked = sideBySide
             setOnCheckedChangeListener { _, c -> sideBySide = c }
         })
+
         AlertDialog.Builder(ctx)
             .setTitle("View settings")
-            .setView(box)
+            .setView(ScrollView(ctx).apply { addView(box) })
             .setPositiveButton("Save") { _, _ ->
                 save(ctx)
                 onChanged()
             }
+            .setNeutralButton("Defaults") { _, _ ->
+                resetDefaults()
+                save(ctx)
+                onChanged()
+            }
             .setNegativeButton("Cancel") { _, _ ->
-                fontIndex = before[0]
-                themeIndex = before[1]
+                fontIndex = beforeChoice[0]
+                themeIndex = beforeChoice[1]
                 fileText = beforeSizes[0]
                 consoleText = beforeSizes[1]
                 buttonText = beforeSizes[2]
@@ -131,6 +165,13 @@ object ViewConfig {
                 onChanged()
             }
             .show()
+    }
+
+    private fun heading(ctx: Context, text: String): TextView = TextView(ctx).apply {
+        this.text = text
+        textSize = 13f
+        setTypeface(null, Typeface.BOLD)
+        setPadding(0, 28, 0, 6)
     }
 
     private fun choose(ctx: Context, title: String, names: List<String>, current: Int, set: (Int) -> Unit) {
