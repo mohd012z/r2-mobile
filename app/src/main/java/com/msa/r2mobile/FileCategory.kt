@@ -5,18 +5,18 @@ import java.util.Collections
 import java.util.zip.ZipFile
 
 /** File types the app recognises, detected from magic bytes (the first bytes of the file). */
-enum class FileCategory(val label: String) {
-    APK("APK (Android app)"),
-    DEX("DEX (Android bytecode)"),
-    ELF_SHARED("ELF shared library (.so)"),
-    ELF_EXEC("ELF executable"),
-    PE("PE (Windows .exe/.dll)"),
-    MACHO("Mach-O (Apple binary)"),
-    JAR("JAR (Java archive)"),
-    ZIP("ZIP archive"),
-    IMAGE("Image (PNG/JPEG/GIF)"),
-    PDF("PDF document"),
-    UNKNOWN("Unknown / raw data");
+enum class FileCategory(val label: String, val short: String) {
+    APK("APK (Android app)", "APK"),
+    DEX("DEX (Android bytecode)", "DEX"),
+    ELF_SHARED("ELF shared library (.so)", "SO"),
+    ELF_EXEC("ELF executable", "ELF"),
+    PE("PE (Windows .exe/.dll)", "PE"),
+    MACHO("Mach-O (Apple binary)", "MACHO"),
+    JAR("JAR (Java archive)", "JAR"),
+    ZIP("ZIP archive", "ZIP"),
+    IMAGE("Image (PNG/JPEG/GIF)", "IMG"),
+    PDF("PDF document", "PDF"),
+    UNKNOWN("Unknown / raw data", "RAW");
 
     companion object {
         /** Reads the first bytes of [file] and returns its category. */

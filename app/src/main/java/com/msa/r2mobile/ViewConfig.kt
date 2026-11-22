@@ -42,13 +42,13 @@ object ViewConfig {
     var sideBySide = true
 
     /** Colours of one template: panel background, text, header bar, and the highlight for marked rows. */
-    data class Palette(val bg: Int, val text: Int, val header: Int, val mark: Int)
+    data class Palette(val bg: Int, val text: Int, val header: Int, val mark: Int, val markDim: Int)
 
     fun palette(): Palette = when (themeIndex) {
-        1 -> Palette(0xFFF5F7FA.toInt(), 0xFF101418.toInt(), 0xFFDDE3EA.toInt(), 0x552979FF)
-        2 -> Palette(0xFF050A05.toInt(), 0xFF39FF14.toInt(), 0xFF0E1F0E.toInt(), 0x5539FF14)
-        3 -> Palette(0xFF0B1A2E.toInt(), 0xFFBBD7FF.toInt(), 0xFF16304F.toInt(), 0x5500B8D4)
-        else -> Palette(0xFF0B0F14.toInt(), 0xFFD4D4D4.toInt(), 0xFF1E2A36.toInt(), 0x552979FF)
+        1 -> Palette(0xFFF5F7FA.toInt(), 0xFF101418.toInt(), 0xFFDDE3EA.toInt(), 0xFF4493F8.toInt(), 0x554493F8.toInt())
+        2 -> Palette(0xFF050A05.toInt(), 0xFF39FF14.toInt(), 0xFF0E1F0E.toInt(), 0xFF2ECC40.toInt(), 0x552ECC40.toInt())
+        3 -> Palette(0xFF0B1A2E.toInt(), 0xFFBBD7FF.toInt(), 0xFF16304F.toInt(), 0xFF00B8D4.toInt(), 0x5500B8D4.toInt())
+        else -> Palette(0xFF0B0F14.toInt(), 0xFFD4D4D4.toInt(), 0xFF1E2A36.toInt(), 0xFF4493F8.toInt(), 0x554493F8.toInt())
     }
 
     fun typeface(): Typeface = when (fontIndex) {

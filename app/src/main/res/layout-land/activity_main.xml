@@ -32,122 +32,133 @@
                 android:text="Idle"
                 android:textSize="12sp" />
 
-            <LinearLayout
-                android:layout_width="wrap_content"
+            <!-- Category strip, same as portrait: quick-pick the file type for the functions and the file manager. -->
+            <HorizontalScrollView
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal">
+                android:fillViewport="true"
+                android:paddingTop="4dp"
+                android:scrollbars="none">
+
+                <LinearLayout
+                    android:id="@+id/categoryStrip"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal" />
+            </HorizontalScrollView>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingTop="4dp">
 
                 <Button
                     android:id="@+id/tabMenuButton"
-                    style="@style/CompactButton"
+                    style="@style/DockButton"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:minHeight="36dp"
-                    android:minWidth="0dp"
-                    android:paddingLeft="12dp"
-                    android:paddingRight="12dp"
+                    android:paddingLeft="10dp"
+                    android:paddingRight="10dp"
                     android:text="Tab 1 ▼" />
 
                 <Button
                     android:id="@+id/addTabButton"
-                    style="@style/CompactButton"
+                    style="@style/DockButton"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:minHeight="36dp"
-                    android:minWidth="0dp"
-                    android:paddingLeft="12dp"
-                    android:paddingRight="12dp"
+                    android:paddingLeft="10dp"
+                    android:paddingRight="10dp"
                     android:text="+" />
-            </LinearLayout>
-
-            <EditText
-                android:id="@+id/cmdInput"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:fontFamily="monospace"
-                android:hint="number, 0x address, or find WORD"
-                android:imeOptions="actionGo"
-                android:inputType="text"
-                android:singleLine="true" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal">
 
                 <Button
                     android:id="@+id/functionsPickButton"
-                    style="@style/CompactButton"
+                    style="@style/DockButton"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="Functions ▼" />
-
-                <Button
-                    android:id="@+id/runButton"
-                    style="@style/CompactButton"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Run" />
+                    android:text="FUNCTIONS ▼" />
             </LinearLayout>
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal">
+                android:orientation="horizontal"
+                android:paddingTop="4dp">
 
-                <Button
-                    android:id="@+id/fileMenuButton"
-                    style="@style/CompactButton"
+                <EditText
+                    android:id="@+id/cmdInput"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="FILE ▼" />
+                    android:fontFamily="monospace"
+                    android:hint="number, 0x address, or find WORD"
+                    android:imeOptions="actionGo"
+                    android:inputType="text"
+                    android:singleLine="true" />
+
+                <Button
+                    android:id="@+id/runButton"
+                    style="@style/DockButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:paddingLeft="14dp"
+                    android:paddingRight="14dp"
+                    android:text="RUN" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingTop="4dp">
+
+                <Button
+                    android:id="@+id/fileMenuButton"
+                    style="@style/DockButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="FILES ▼" />
 
                 <Button
                     android:id="@+id/runMenuButton"
-                    style="@style/CompactButton"
+                    style="@style/DockButton"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:text="ANALYZE ▼" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal">
 
                 <Button
                     android:id="@+id/findMenuButton"
-                    style="@style/CompactButton"
+                    style="@style/DockButton"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:text="FIND ▼" />
-
-                <Button
-                    android:id="@+id/viewMenuButton"
-                    style="@style/CompactButton"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="VIEW ▼" />
             </LinearLayout>
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal">
+                android:orientation="horizontal"
+                android:paddingTop="4dp">
 
                 <Button
                     android:id="@+id/pluginMenuButton"
-                    style="@style/CompactButton"
+                    style="@style/DockButton"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="PLUGINS ▼" />
+                    android:text="TOOLS ▼" />
+
+                <Button
+                    android:id="@+id/viewMenuButton"
+                    style="@style/DockButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="VIEW ▼" />
             </LinearLayout>
         </LinearLayout>
     </ScrollView>
@@ -189,13 +200,11 @@
 
         <Button
             android:id="@+id/fullscreenButton"
-            style="@style/CompactButton"
+            style="@style/DockButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="top|end"
             android:layout_margin="4dp"
-            android:minHeight="36dp"
-            android:minWidth="0dp"
             android:paddingLeft="10dp"
             android:paddingRight="10dp"
             android:text="FULL" />

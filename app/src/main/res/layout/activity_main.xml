@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Portrait: console on top, with FULL inside its corner. Tabs, command row and four menus at the bottom. -->
+<!-- Portrait: console on top (FULL inside its corner). Bottom dock, in order:
+     progress, status, category strip (applies to every screen, scrolls if narrow),
+     command row, then the menus grouped by category (FILES / ANALYZE / FIND / TOOLS / VIEW). -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -42,16 +44,14 @@
             </HorizontalScrollView>
         </ScrollView>
 
-        <!-- FULL / DEFAULT: hides the controls so the console fills the screen. Press again to get the controls back. -->
+        <!-- FULL / DEFAULT: hides the dock so the console fills the screen. Press again to get it back. -->
         <Button
             android:id="@+id/fullscreenButton"
-            style="@style/CompactButton"
+            style="@style/DockButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="top|end"
             android:layout_margin="4dp"
-            android:minHeight="36dp"
-            android:minWidth="0dp"
             android:paddingLeft="10dp"
             android:paddingRight="10dp"
             android:text="FULL" />
@@ -78,49 +78,46 @@
             android:text="Idle"
             android:textSize="12sp" />
 
-        <!-- Console tabs: small buttons, the same size as +. -->
-        <LinearLayout
-            android:layout_width="wrap_content"
+        <!-- Category strip: quick-pick the file type the functions are filtered by.
+             It applies to the console (FUNCTIONS menu) and to the file manager (APK / DEX / SO). -->
+        <HorizontalScrollView
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal">
+            android:fillViewport="true"
+            android:paddingTop="4dp"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:id="@+id/categoryStrip"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal" />
+        </HorizontalScrollView>
+
+        <!-- Command row: tabs, then the typed command, then Run. -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingTop="4dp">
 
             <Button
                 android:id="@+id/tabMenuButton"
-                style="@style/CompactButton"
+                style="@style/DockButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:minHeight="36dp"
-                android:minWidth="0dp"
-                android:paddingLeft="12dp"
-                android:paddingRight="12dp"
+                android:paddingLeft="10dp"
+                android:paddingRight="10dp"
                 android:text="Tab 1 ▼" />
 
             <Button
                 android:id="@+id/addTabButton"
-                style="@style/CompactButton"
+                style="@style/DockButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:minHeight="36dp"
-                android:minWidth="0dp"
-                android:paddingLeft="12dp"
-                android:paddingRight="12dp"
+                android:paddingLeft="10dp"
+                android:paddingRight="10dp"
                 android:text="+" />
-        </LinearLayout>
-
-        <!-- Command row: Functions on the left, the typed command, then the single Run button. -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal">
-
-            <Button
-                android:id="@+id/functionsPickButton"
-                style="@style/CompactButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:paddingLeft="12dp"
-                android:paddingRight="12dp"
-                android:text="Functions ▼" />
 
             <EditText
                 android:id="@+id/cmdInput"
@@ -135,31 +132,47 @@
 
             <Button
                 android:id="@+id/runButton"
-                style="@style/CompactButton"
+                style="@style/DockButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:paddingLeft="14dp"
                 android:paddingRight="14dp"
-                android:text="Run" />
+                android:text="RUN" />
         </LinearLayout>
 
-        <!-- Four menus, grouped by task. Each opens a dropdown list. -->
+        <!-- Menus, grouped by category. Each opens a dropdown list. -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:paddingTop="4dp">
 
             <Button
-                android:id="@+id/fileMenuButton"
-                style="@style/CompactButton"
+                android:id="@+id/functionsPickButton"
+                style="@style/DockButton"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="FILE ▼" />
+                android:text="FUNCTIONS ▼" />
+
+            <Button
+                android:id="@+id/fileMenuButton"
+                style="@style/DockButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="FILES ▼" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingTop="4dp">
 
             <Button
                 android:id="@+id/runMenuButton"
-                style="@style/CompactButton"
+                style="@style/DockButton"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
@@ -167,26 +180,34 @@
 
             <Button
                 android:id="@+id/findMenuButton"
-                style="@style/CompactButton"
+                style="@style/DockButton"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:text="FIND ▼" />
 
             <Button
+                android:id="@+id/pluginMenuButton"
+                style="@style/DockButton"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="TOOLS ▼" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingTop="4dp">
+
+            <Button
                 android:id="@+id/viewMenuButton"
-                style="@style/CompactButton"
+                style="@style/DockButton"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:text="VIEW ▼" />
-            <Button
-                android:id="@+id/pluginMenuButton"
-                style="@style/CompactButton"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="PLUGINS ▼" />
         </LinearLayout>
     </LinearLayout>
 

@@ -100,6 +100,7 @@ class MainActivity : ComponentActivity() {
         outputText.setTextColor(ViewConfig.consoleFg())
         (outputText.parent as? View)?.setBackgroundColor(ViewConfig.consoleBg())
         ViewConfig.applyButtons(window.decorView)
+        refreshChips()
     }
 
     /** Returns from the file manager with the file the user chose to open in R2. */
@@ -152,6 +153,7 @@ class MainActivity : ComponentActivity() {
         findViewById<Button>(R.id.functionsPickButton).setOnClickListener { showFunctionMenu() }
         findViewById<Button>(R.id.fullscreenButton).setOnClickListener { toggleFullscreen() }
         colourButtons()
+        buildCategoryStrip()
         findViewById<Button>(R.id.fileMenuButton).setOnClickListener { dropdown(it, fileMenu()) }
         findViewById<Button>(R.id.runMenuButton).setOnClickListener { dropdown(it, runMenu()) }
         findViewById<Button>(R.id.findMenuButton).setOnClickListener { dropdown(it, findMenu()) }
@@ -174,7 +176,7 @@ class MainActivity : ComponentActivity() {
             write(Console.Style.HEADER, "R2 Mobile console")
             write(Console.Style.INFO, "Type a function number (e.g. 11), or a shortcut such as 'help'.")
         }
-        advice("tap OPEN and pick a file. An APK, a .so or any program works.")
+        advice("tap FILES > Open a file and pick a file. An APK, a .so or any program works.")
         if (!r2Binary.exists()) {
             say(Console.Style.ERROR, "The radare2 engine (libr2.so) is missing from this build.")
             advice("rebuild the APK with GitHub Actions and install it again.")
@@ -267,7 +269,7 @@ class MainActivity : ComponentActivity() {
 
     private fun clearConsole() {
         ui { clear() }
-        advice("tap OPEN to load a file, or type 'help'.")
+        advice("tap FILES > Open a file to load a file, or type 'help'.")
     }
 
     // ---- loading -----------------------------------------------------------
@@ -294,6 +296,7 @@ class MainActivity : ComponentActivity() {
             loadedName = name
             loaded = category
             filter = category
+            refreshChips()
             say(Console.Style.OK, "loaded $name (${dest.length()} bytes)")
             say(Console.Style.INFO, "type: ${category.label}. Filter set to this type.")
             advice(Advice.afterOpen(category))
@@ -372,11 +375,60 @@ class MainActivity : ComponentActivity() {
             .setTitle("Filter by file type")
             .setItems(labels) { _, which ->
                 filter = options[which]
+                refreshChips()
                 say(Console.Style.INFO, "filter: ${options[which]?.label ?: "All file types"}")
                 advice("tap FUNCTIONS to see the steps for this filter.")
             }
             .setNegativeButton("Close", null)
             .show()
+    }
+
+    // ---- category quick-pick strip ------------------------------------------
+
+    /**
+     * The strip of file-type chips under the status line. Tapping one sets the shared
+     * category: the FUNCTIONS menu lists only that type's functions, and the file manager
+     * lists only that type's files (it reads the category when the console opens it).
+     */
+    private fun buildCategoryStrip() {
+        val strip = findViewById<LinearLayout>(R.id.categoryStrip)
+        strip.removeAllViews()
+        strip.addView(chip("ALL") { setFilter(null) }, chipParams())
+        FileCategory.values().forEach { c ->
+            strip.addView(chip(c.short) { setFilter(c) }, chipParams())
+        }
+        refreshChips()
+    }
+
+    private fun chipParams() = LinearLayout.LayoutParams(
+        LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+    ).apply { marginStart = 6; marginEnd = 6 }
+
+    private fun chip(text: String, onPick: () -> Unit): Button = Button(this, null, 0, R.style.Chip).apply {
+        this.text = text
+        setOnClickListener { onPick() }
+    }
+
+    private fun setFilter(c: FileCategory?) {
+        filter = c
+        refreshChips()
+        say(Console.Style.INFO, "category: ${c?.label ?: "All file types"}. FUNCTIONS lists only this type; the file manager will list only this type's files.")
+        advice("tap FUNCTIONS for the steps for this type, or FILES > File manager to browse its files.")
+    }
+
+    /** The active chip uses the theme's highlight colour; the others stay dim. */
+    private fun refreshChips() {
+        val strip = findViewById<LinearLayout>(R.id.categoryStrip)
+        val p = ViewConfig.palette()
+        val base = 0xFF37474F.toInt()
+        for (i in 0 until strip.childCount) {
+            val v = strip.getChildAt(i)
+            if (v is Button) {
+                val active = v.text.toString() == (filter?.short ?: "ALL")
+                v.setBackgroundColor(if (active) p.mark else base)
+                v.setTextColor(Color.WHITE)
+            }
+        }
     }
 
     /** The tutorial for one function, with a Run button. */
@@ -429,7 +481,7 @@ class MainActivity : ComponentActivity() {
             write(Console.Style.INFO, "  filter: ${filter?.label ?: "All file types"}")
             write(Console.Style.INFO, "  busy:   ${if (running != null) "yes, a command is running" else "no"}")
         }
-        advice(if (current == null) "tap OPEN to load a file." else Advice.GENERIC)
+        advice(if (current == null) "tap FILES > Open a file to load a file." else Advice.GENERIC)
     }
 
     // ---- typed input -------------------------------------------------------
@@ -539,7 +591,7 @@ class MainActivity : ComponentActivity() {
         val target = targetPath
         if (current == null || target == null) {
             say(Console.Style.WARN, "No file loaded.")
-            advice("tap OPEN and pick a file first.")
+            advice("tap FILES > Open a file and pick a file first.")
             return
         }
         if (current !in feature.appliesTo) {
@@ -585,7 +637,7 @@ class MainActivity : ComponentActivity() {
         val target = targetPath
         if (target == null) {
             say(Console.Style.WARN, "No file loaded.")
-            advice("tap OPEN and pick a file first.")
+            advice("tap FILES > Open a file and pick a file first.")
             return
         }
         if (!r2Binary.exists()) {
@@ -1084,13 +1136,13 @@ class MainActivity : ComponentActivity() {
     /** Each category has its own colour, so the buttons are easy to tell apart. */
     private fun colourButtons() {
         val colours = mapOf(
-            R.id.fileMenuButton to "#2979FF",       // FILE: blue
+            R.id.fileMenuButton to "#2979FF",       // FILES: blue
             R.id.runButton to "#00C853",            // RUN: green
             R.id.functionsPickButton to "#00B8D4",  // FUNCTIONS: cyan
-            R.id.runMenuButton to "#00C853",        // RUN menu: green
+            R.id.runMenuButton to "#00897B",        // ANALYZE: teal
             R.id.findMenuButton to "#FF9100",       // FIND: orange
             R.id.viewMenuButton to "#AA00FF",       // VIEW: purple
-            R.id.pluginMenuButton to "#FFD600",     // PLUGINS: yellow
+            R.id.pluginMenuButton to "#FFD600",     // TOOLS: yellow
             R.id.fullscreenButton to "#607D8B",     // FULL: slate
             R.id.tabMenuButton to "#00897B",        // TAB: teal
             R.id.addTabButton to "#00897B",         // +: teal
@@ -1100,7 +1152,7 @@ class MainActivity : ComponentActivity() {
                 // A coloured shape, not a tint: the tint did not show on this theme.
                 background = GradientDrawable().apply {
                     shape = GradientDrawable.RECTANGLE
-                    cornerRadius = 18f
+                    cornerRadius = 14f
                     setColor(Color.parseColor(hex))
                 }
                 stateListAnimator = null
@@ -1172,7 +1224,7 @@ class MainActivity : ComponentActivity() {
             val file = targetPath?.let { File(it) }
             val fileOk = file != null && file.exists() && file.length() > 0
             checks += Triple("a file is loaded (${loadedName ?: "none"})", fileOk,
-                "tap OPEN and pick a file. Then run troubleshooting again.")
+                "tap FILES > Open a file and pick a file. Then run troubleshooting again.")
             if (engineOk && fileOk) {
                 val info = quickRun(r2Binary.absolutePath, "-N", "-qc", "i", file!!.absolutePath) ?: ""
                 val readable = info.contains("arch")
@@ -1360,6 +1412,7 @@ class MainActivity : ComponentActivity() {
         val category = FileCategory.detect(f)
         loaded = category
         filter = category
+        refreshChips()
         say(Console.Style.OK, "loaded ${f.name} (${category.label})")
         advice("tap FUNCTIONS to pick a step, or type a number in the box and press RUN.")
         showPlan(category)
@@ -1502,6 +1555,12 @@ class MainActivity : ComponentActivity() {
 
     private fun fileMenu(): List<Pair<String, () -> Unit>> = listOf(
         item("Open a file") { pickFile.launch(arrayOf("*/*")) },
+        item("Dual-pane file manager (APK / DEX / SO lists)") {
+            val i = Intent(this, FileManagerActivity::class.java)
+            filter?.let { i.putExtra(FileManagerActivity.EXTRA_CATEGORY, it.name) }
+            fileManagerResult.launch(i)
+        },
+        item("File types: APK, DEX, SO, JAR, PE, ...") { showFilterMenu() },
         item("Save console to a file") { saveLog() },
         item("Save project (file + console log)") { saveProject() },
         item("Open a saved project") { openProject() },
@@ -1511,7 +1570,6 @@ class MainActivity : ComponentActivity() {
         item("How to analyze and modify an APK (flow)") { showFlow() },
         item("Patch bytes, writes a copy (25)") { numbered(25) },
         item("Open the save folder (Download/msar2)") { showSaveFolder() },
-        item("Dual-pane file manager") { fileManagerResult.launch(Intent(this, FileManagerActivity::class.java)) },
     )
 
     private fun runMenu(): List<Pair<String, () -> Unit>> = listOf(

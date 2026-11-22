@@ -30,7 +30,8 @@ import java.security.MessageDigest
 import java.util.concurrent.Executors
 
 /**
- * Dual-pane file manager. Two folder panes, side by side or stacked (View settings).
+ * Dual-pane file manager, MT Manager style. Two folder panes, side by side or stacked
+ * (View settings), with a quick-pick category strip (APK / DEX / SO / ...) above them.
  * Each pane is limited to one storage place, so "up" never leaves it. Storage places:
  * internal shared storage (/storage/emulated/0), the app's private folder, and any SD card.
  * Mark files, then copy, move, paste, rename, delete, share, compress, extract, encrypt,
@@ -42,6 +43,8 @@ class FileManagerActivity : Activity() {
         /** Name of the pane root: the shared internal storage, every folder Android lets the app see. */
         const val PHONE_LABEL = "Phone storage (internal, all folders)"
         const val EXTRA_PATH = "path"
+        /** Set by the console before the file manager opens: which file type to list. null = all. */
+        const val EXTRA_CATEGORY = "category"
         private const val MAX_SEARCH = 5_000
     }
 
@@ -55,6 +58,8 @@ class FileManagerActivity : Activity() {
         /** Search results shown instead of the folder, or null when browsing. */
         var search: List<File>? = null
         private var rows: List<File?> = emptyList()   // null row = ".." (go up)
+        /** File types this pane lists (folders always); null lists everything. */
+        var categories: Set<FileCategory>? = null
 
         private val header = TextView(this@FileManagerActivity).apply {
             textSize = 12f
@@ -141,15 +146,16 @@ class FileManagerActivity : Activity() {
 
         fun refresh() {
             val results = search
-            rows = if (results != null) {
-                results
+            val kids = if (results != null) {
+                results.filter { it.isDirectory || matches(it) }
             } else {
                 val raw: List<File> = dir.listFiles()?.toList() ?: emptyList()
-                val kids = raw
-                    .filter { ViewConfig.showHidden || !it.name.startsWith(".") }
+                raw
+                    .filter { it.isDirectory || (ViewConfig.showHidden || !it.name.startsWith(".")) }
+                    .filter { it.isDirectory || matches(it) }
                     .sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() }))
-                (if (dir.canonicalPath != top.canonicalPath) listOf<File?>(null) else emptyList()) + kids
             }
+            rows = (if (dir.canonicalPath != top.canonicalPath) listOf<File?>(null) else emptyList()) + kids
             adapter.clear()
             adapter.addAll(rows.map { label(it, results != null) })
             adapter.notifyDataSetChanged()
@@ -160,13 +166,21 @@ class FileManagerActivity : Activity() {
             header.setBackgroundColor(if (isActive) 0xFF2E9E4F.toInt() else 0xFF1B5E20.toInt())
             header.setTextColor(Color.WHITE)
             list.setBackgroundColor(p.bg)
+            val cat = if (categories == null) "" else "   [${categories?.joinToString("/") { it.short } ?: "all"}]"
             header.text = if (results != null) {
-                "SEARCH in $topLabel: ${results.size} found   marked ${marked.size}"
+                "SEARCH in $topLabel: ${results.size} found   marked ${marked.size}$cat"
             } else {
                 val rel = dir.absolutePath.removePrefix(top.absolutePath).ifEmpty { "/" }
                 val blocked = if (dir.canRead()) "" else "   (Android blocks this folder)"
-                "$topLabel  $rel$blocked   marked ${marked.size}"
+                "$topLabel  $rel$blocked   marked ${marked.size}$cat"
             }
+        }
+
+        /** Folders always list; files only when the pane's category matches their detected type. */
+        private fun matches(f: File): Boolean {
+            val c = categories ?: return true
+            if (c.isEmpty()) return true
+            return f.isFile && FileCategory.detect(f) in c
         }
 
         private fun label(f: File?, searching: Boolean): String {
@@ -190,6 +204,8 @@ class FileManagerActivity : Activity() {
     private lateinit var detector: ScaleGestureDetector
     /** Zip, encrypt, decrypt, search and copy run here so big files do not freeze the screen. */
     private val worker = Executors.newSingleThreadExecutor()
+    private val chipButtons = mutableListOf<Button>()
+    private var chipFilter: FileCategory? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -316,11 +332,37 @@ class FileManagerActivity : Activity() {
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 
+    /**
+     * The MT Manager style screen: a quick-pick category strip on top (ALL / APK / DEX / SO / ...),
+     * the two panes in the middle, then a row of compact buttons that reflows across lines as the
+     * screen narrows, so it fits phones, tablets and foldables without being clipped.
+     */
     private fun buildLayout() {
         root.removeAllViews()
         root.setBackgroundColor(ViewConfig.palette().bg)
         detach(left.root)
         detach(right.root)
+
+        // Category strip: chips are added programmatically (they scroll sideways when narrow).
+        val strip = HorizontalStrip(this)
+        chipButtons.clear()
+        chipFilter = intent.getStringExtra(EXTRA_CATEGORY)?.let { runCatching { FileCategory.valueOf(it) }.getOrNull() }
+        // Order: ALL, then the common Android types first, then the rest.
+        val ordered = listOf<FileCategory?>(
+            null, FileCategory.APK, FileCategory.DEX, FileCategory.ELF_SHARED, FileCategory.ELF_EXEC,
+            FileCategory.PE, FileCategory.MACHO, FileCategory.JAR, FileCategory.ZIP, FileCategory.IMAGE, FileCategory.PDF
+        )
+        ordered.forEach { c ->
+            val b = Button(this, null, 0, R.style.Chip).apply {
+                text = c?.short ?: "ALL"
+                setOnClickListener { setChipFilter(c) }
+            }
+            chipButtons += b
+            strip.addView(b, HorizontalStrip.ChildParams())
+        }
+        strip.setPadding(0, 4, 0, 4)
+        root.addView(strip, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+
         val side = ViewConfig.sideBySide
         val panes = LinearLayout(this).apply {
             orientation = if (side) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
@@ -354,26 +396,99 @@ class FileManagerActivity : Activity() {
             })
         }
         root.addView(panes, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
-        root.addView(buttonRow(
-            "Copy >" to { transfer(move = false) },
-            "Move >" to { transfer(move = true) },
-            "Delete" to { deleteMarked() },
-            "Actions" to { showActions() },
-        ))
+        root.addView(wrapButtonRow())
+        refreshChips()
+        applyChipFilter()
         refreshBoth()
     }
 
-    private fun buttonRow(vararg items: Pair<String, () -> Unit>): LinearLayout =
-        LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            items.forEach { (label, action) ->
-                addView(Button(this@FileManagerActivity).apply {
-                    text = label
-                    textSize = ViewConfig.buttonText
-                    setOnClickListener { action() }
-                }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-            }
+    private class HorizontalStrip(ctx: android.content.Context) : LinearLayout(ctx) {
+        init { orientation = HORIZONTAL }
+        class ChildParams : LayoutParams(WRAP_CONTENT, WRAP_CONTENT) {
+            init { marginStart = 6; marginEnd = 6 }
         }
+    }
+
+    /** The button row, wrapped into as many lines as the screen width allows. */
+    private fun wrapButtonRow(): LinearLayout {
+        val items = listOf(
+            "⬆ Up" to { active?.goUp() },
+            "Refresh" to { refreshBoth() },
+            "Copy >" to { transfer(move = false) },
+            "Move >" to { transfer(move = true) },
+            "Paste" to { active?.let { paste(it.dir) } },
+            "Delete" to { deleteMarked() },
+            "Rename" to { rename() },
+            "New folder" to { newFolder() },
+            "View" to { viewFile() },
+            "Zip" to { zipMarked() },
+            "Unzip" to { unzipOne() },
+            "Share" to { share() },
+            "Encrypt" to { encryptMarked() },
+            "Decrypt" to { decryptMarked() },
+            "Search" to { searchDialog() },
+            "R2 >" to { openInR2() },
+            "Actions" to { showActions() },
+        )
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, dp(6), 0, 0)
+        }
+        // Budget = the screen's real width in dp, so rows fill tablets too and wrap only on narrow phones.
+        val budget = (resources.displayMetrics.widthPixels / resources.displayMetrics.density).toFloat()
+        var line = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        var used = 0f
+        items.forEach { (label, action) ->
+            val est = (label.length * 6.5f + 24f)  // rough: one char ≈ 6.5dp at 11sp + padding
+            if (used + est > budget && line.childCount > 0) {
+                row.addView(line)
+                line = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    setPadding(0, 4, 0, 0)
+                }
+                used = 0f
+            }
+            line.addView(Button(this@FileManagerActivity, null, 0, R.style.Chip).apply {
+                text = label
+                setOnClickListener { action() }
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginStart = 3; marginEnd = 3
+            })
+            used += est
+        }
+        if (line.childCount > 0) row.addView(line)
+        return row
+    }
+
+    /** ALL clears the lists; a type lists only files of that type (folders always). */
+    private fun setChipFilter(c: FileCategory?) {
+        chipFilter = c
+        applyChipFilter()
+        refreshChips()
+        refreshBoth()
+        if (c == null) {
+            toast("lists every file type.")
+        } else {
+            toast("this pane lists only ${c.label}. Folders are always shown; use a type from the strip or Actions > File types.")
+        }
+    }
+
+    private fun applyChipFilter() {
+        val c = chipFilter
+        left.categories = c?.let { setOf(it) }
+        right.categories = c?.let { setOf(it) }
+    }
+
+    /** The active chip uses the theme's highlight colour; the others stay dim. */
+    private fun refreshChips() {
+        val p = ViewConfig.palette()
+        val base = 0xFF37474F.toInt()
+        chipButtons.forEach { b ->
+            val active = b.text.toString() == (chipFilter?.short ?: "ALL")
+            b.setBackgroundColor(if (active) p.mark else base)
+            b.setTextColor(Color.WHITE)
+        }
+    }
 
     private fun refreshBoth() {
         left.refresh()
@@ -398,6 +513,7 @@ class FileManagerActivity : Activity() {
 
     private fun showActions() {
         val items: List<Pair<String, () -> Unit>> = listOf(
+            "File types: list only APK / DEX / SO / ..." to { showTypeFilter() },
             "Storage for this pane (internal, app, SD card)" to { chooseStorage() },
             "Select all in this pane" to { active?.let { it.marked.addAll(it.visible()); refreshBoth() } },
             "Clear marks" to { active?.marked?.clear(); refreshBoth() },
@@ -421,6 +537,19 @@ class FileManagerActivity : Activity() {
         AlertDialog.Builder(this)
             .setTitle("Actions")
             .setItems(items.map { it.first }.toTypedArray()) { _, i -> items[i].second() }
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
+    /** The same type list as the console's category strip: folders always stay visible. */
+    private fun showTypeFilter() {
+        val options: List<FileCategory?> = listOf<FileCategory?>(null) + FileCategory.values().toList()
+        AlertDialog.Builder(this)
+            .setTitle("List only these files")
+            .setMessage("Folders are always listed. The same selection is shared with the console's category strip.")
+            .setItems(options.map { it?.label ?: "All file types" }.toTypedArray()) { _, i ->
+                setChipFilter(options[i])
+            }
             .setNegativeButton("Close", null)
             .show()
     }
