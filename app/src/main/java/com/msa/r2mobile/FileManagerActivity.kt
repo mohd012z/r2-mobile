@@ -142,10 +142,15 @@ class FileManagerActivity : Activity() {
             rows = if (results != null) {
                 results
             } else {
-                val kids = dir.listFiles()
-                    ?.filter { ViewConfig.showHidden || !it.name.startsWith(".") }
-                    ?.sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() }))
-                    ?: emptyList()
+                // /storage itself is hidden by Android, so it shows the storage places instead.
+                val raw: List<File> = if (isPhoneRoot(dir)) {
+                    storages().map { it.dir }.distinctBy { it.path }.filter { !isPhoneRoot(it) }
+                } else {
+                    dir.listFiles()?.toList() ?: emptyList()
+                }
+                val kids = raw
+                    .filter { ViewConfig.showHidden || !it.name.startsWith(".") }
+                    .sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() }))
                 (if (dir.canonicalPath != top.canonicalPath) listOf<File?>(null) else emptyList()) + kids
             }
             adapter.clear()
@@ -161,7 +166,7 @@ class FileManagerActivity : Activity() {
                 "SEARCH in $topLabel: ${results.size} found   marked ${marked.size}"
             } else {
                 val rel = dir.absolutePath.removePrefix(top.absolutePath).ifEmpty { "/" }
-                val blocked = if (dir.canRead()) "" else "   (Android blocks this folder)"
+                val blocked = if (dir.canRead() || isPhoneRoot(dir)) "" else "   (Android blocks this folder)"
                 "$topLabel  $rel$blocked   marked ${marked.size}"
             }
         }
@@ -169,7 +174,11 @@ class FileManagerActivity : Activity() {
         private fun label(f: File?, searching: Boolean): String {
             if (f == null) return "..  (parent folder)"
             val mark = if (f in marked) "✔ " else ""
-            val name = if (searching) f.absolutePath.removePrefix(top.absolutePath + File.separator) else f.name
+            val name = when {
+                searching -> f.absolutePath.removePrefix(top.absolutePath + File.separator)
+                isPhoneRoot(dir) -> storages().firstOrNull { it.dir.path == f.path }?.label ?: f.name
+                else -> f.name
+            }
             return if (f.isDirectory) "$mark$name" else "$mark$name   ${humanSize(f.length())}"
         }
     }
@@ -264,6 +273,8 @@ class FileManagerActivity : Activity() {
             .setNegativeButton("Close", null)
             .show()
     }
+
+    private fun isPhoneRoot(f: File): Boolean = f.path == "/storage"
 
     private fun hasAllFilesAccess(): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.R || Environment.isExternalStorageManager()

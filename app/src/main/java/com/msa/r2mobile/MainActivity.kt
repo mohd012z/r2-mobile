@@ -204,7 +204,7 @@ class MainActivity : ComponentActivity() {
     private fun advice(text: String) = ui { write(Console.Style.ADVICE, "NEXT: $text") }
 
     /** Where saved projects live: one folder per project, with a copy of the file and the console log. */
-    private fun projectRoot(): File = File(getExternalFilesDir(null) ?: filesDir, "projects")
+    private fun projectRoot(): File = File(PublicFolder.dir(this), "projects")
 
     /** Saves the loaded file and the console log as a project, so the work can be reopened later. */
     private fun saveProject() {
@@ -912,13 +912,13 @@ class MainActivity : ComponentActivity() {
 
     private fun saveLog() {
         val text = console.plainText()
-        val dir = getExternalFilesDir(null) ?: filesDir
+        val dir = PublicFolder.dir(this)
         worker.execute {
             try {
                 val out = File(dir, "r2-log-${System.currentTimeMillis()}.txt")
                 out.writeText(text)
                 say(Console.Style.OK, "saved: ${out.name}")
-                say(Console.Style.INFO, "find it in Files > Android > data > com.msa.r2mobile > files")
+                say(Console.Style.INFO, "find it in Files > Download > R2Mobile")
                 advice("open the file with any text viewer to copy or share it.")
             } catch (e: Exception) {
                 say(Console.Style.ERROR, "could not save: ${e.message}")
@@ -1653,6 +1653,9 @@ class MainActivity : ComponentActivity() {
     /** Folder for every output file (encrypted, decrypted, patched). Shown to the user after each save. */
     private fun outputDir(): File = getExternalFilesDir(null) ?: filesDir
 
+    /** Results you must find yourself go to Download/R2Mobile. */
+    private fun resultDir(): File = PublicFolder.dir(this)
+
     private fun showGuide() {
         ui {
             write(Console.Style.HEADER, "Patching guide")
@@ -1683,14 +1686,14 @@ class MainActivity : ComponentActivity() {
                 return@askPassword
             }
             worker.execute {
-                val out = File(outputDir(), "msar2_" + name.removePrefix("msar2_") + ".r2enc")
+                val out = File(resultDir(), "msar2_" + name.removePrefix("msar2_") + ".r2enc")
                 try {
                     say(Console.Style.INFO, "[1/3] reading ${File(target).length()} bytes")
                     say(Console.Style.INFO, "[2/3] deriving key (100000 rounds) and encrypting")
                     FileCrypto.encrypt(File(target), out, pw)
                     say(Console.Style.OK, "[3/3] saved ${out.name} (${out.length()} bytes)")
                     say(Console.Style.INFO, "location: ${out.absolutePath}")
-                    say(Console.Style.INFO, "find it in Files > Android > data > com.msa.r2mobile > files")
+                    say(Console.Style.INFO, "find it in Files > Download > R2Mobile (shared storage, so the file manager can open it)")
                     advice("keep the password safe. Function 24 decrypts this file.")
                 } catch (e: Exception) {
                     out.delete()
@@ -1709,7 +1712,7 @@ class MainActivity : ComponentActivity() {
                 return@askPassword
             }
             worker.execute {
-                val out = File(outputDir(), "msar2_" + name.removePrefix("msar2_").removeSuffix(".r2enc"))
+                val out = File(resultDir(), "msar2_" + name.removePrefix("msar2_").removeSuffix(".r2enc"))
                 try {
                     say(Console.Style.INFO, "[1/3] reading ${File(target).length()} bytes")
                     say(Console.Style.INFO, "[2/3] deriving key and decrypting")
@@ -1762,10 +1765,10 @@ class MainActivity : ComponentActivity() {
             try {
                 val offset = BytePatch.parseOffset(offsetText)
                 val newBytes = BytePatch.parseHex(bytesText)
-                var out = File(outputDir(), "msar2_" + name.removePrefix("msar2_"))
+                var out = File(resultDir(), "msar2_" + name.removePrefix("msar2_"))
                 // Patching a copy that is already loaded must not overwrite the file it reads from.
                 if (out.absolutePath == File(target).absolutePath) {
-                    out = File(outputDir(), "msar2_edit_" + name.removePrefix("msar2_"))
+                    out = File(resultDir(), "msar2_edit_" + name.removePrefix("msar2_"))
                 }
                 say(Console.Style.INFO, "[1/3] copying ${File(target).length()} bytes")
                 say(Console.Style.INFO, "[2/3] writing ${newBytes.size} bytes at 0x${"%x".format(offset)}")
