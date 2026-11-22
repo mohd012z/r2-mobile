@@ -3,7 +3,7 @@ package com.msa.r2mobile
 /** How a feature runs: through radare2, or natively in the app. */
 enum class Action {
     R2, NATIVE_INFO, NATIVE_ZIP_LIST, NATIVE_EXTRACT_DEX, NATIVE_MANIFEST,
-    NATIVE_ENCRYPT, NATIVE_DECRYPT, NATIVE_PATCH, GUIDE,
+    NATIVE_ENCRYPT, NATIVE_DECRYPT, NATIVE_PATCH, GUIDE, R2_BLOCKS, R2_REFERENCE,
 }
 
 /**
@@ -108,6 +108,12 @@ object Catalog {
         add("Guide", "Step-by-step patching guide (read first)", Action.GUIDE, "", EVERYTHING,
             "Explains the whole flow: find the code, look at the bytes, patch a copy, check the result, and what " +
             "this app can and cannot repack. Works without a file loaded.")
+        add("Flow", "Block diagram of the code flow (agfj)", Action.R2_BLOCKS, "", BINARY,
+            "Analyses the program, then lists every block of code at the entry point, with where each block goes " +
+            "next: if true, if false, or back to an earlier address (a loop). Tap an address to read that block.")
+        add("Guide", "radare2 reference: commands, examples, how to read", Action.R2_REFERENCE, "", EVERYTHING,
+            "Explains every command this app uses, with an example and what the output means. Read it once " +
+            "before the other functions. Works without a file loaded.")
     }
 
     val all: List<Feature> get() = list

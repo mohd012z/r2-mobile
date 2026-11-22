@@ -13,11 +13,14 @@ import android.view.inputmethod.EditorInfo
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.PopupMenu
 import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
+import org.json.JSONArray
+import org.json.JSONTokener
 import java.io.File
 import java.io.InputStream
 import java.security.MessageDigest
@@ -84,18 +87,11 @@ class MainActivity : ComponentActivity() {
         statusText = findViewById(R.id.statusText)
         outputText.movementMethod = LinkMovementMethod.getInstance()
 
-        findViewById<Button>(R.id.openButton).setOnClickListener { pickFile.launch(arrayOf("*/*")) }
-        findViewById<Button>(R.id.functionsButton).setOnClickListener { showFunctionMenu() }
-        findViewById<Button>(R.id.filterButton).setOnClickListener { showFilterMenu() }
         findViewById<Button>(R.id.runButton).setOnClickListener { runTyped() }
-        findViewById<Button>(R.id.stopButton).setOnClickListener { stopRunning(quiet = false) }
-        findViewById<Button>(R.id.helpButton).setOnClickListener { showHelp() }
-        findViewById<Button>(R.id.saveButton).setOnClickListener { saveLog() }
-        findViewById<Button>(R.id.clearButton).setOnClickListener { clearConsole() }
-        findViewById<Button>(R.id.topButton).setOnClickListener { scrollView.fullScroll(ScrollView.FOCUS_UP) }
-        findViewById<Button>(R.id.bottomButton).setOnClickListener { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
-        findViewById<Button>(R.id.analyzeButton).setOnClickListener { analyzeInput() }
-        findViewById<Button>(R.id.guideButton).setOnClickListener { showGuide() }
+        findViewById<Button>(R.id.fileMenuButton).setOnClickListener { dropdown(it, fileMenu()) }
+        findViewById<Button>(R.id.runMenuButton).setOnClickListener { dropdown(it, runMenu()) }
+        findViewById<Button>(R.id.findMenuButton).setOnClickListener { dropdown(it, findMenu()) }
+        findViewById<Button>(R.id.viewMenuButton).setOnClickListener { dropdown(it, viewMenu()) }
         cmdInput.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_GO || actionId == EditorInfo.IME_ACTION_DONE) {
                 runTyped()
@@ -313,6 +309,10 @@ class MainActivity : ComponentActivity() {
             showGuide()
             return
         }
+        if (feature.action == Action.R2_REFERENCE) {
+            showReference()
+            return
+        }
         val current = loaded
         val target = targetPath
         if (current == null || target == null) {
@@ -337,6 +337,8 @@ class MainActivity : ComponentActivity() {
             Action.NATIVE_DECRYPT -> decryptLoaded(target, loadedName ?: "file")
             Action.NATIVE_PATCH -> askPatch(target, loadedName ?: "file")
             Action.GUIDE -> showGuide()
+            Action.R2_BLOCKS -> runBlocks(next)
+            Action.R2_REFERENCE -> showReference()
         }
     }
 
@@ -354,7 +356,7 @@ class MainActivity : ComponentActivity() {
     }
 
     /** Runs one radare2 command with a prompt line, a timeout, a size limit and a Stop button. */
-    private fun runR2(cmd: String, next: String) {
+    private fun runR2(cmd: String, next: String, onDone: ((String) -> Unit)? = null) {
         val target = targetPath
         if (target == null) {
             say(Console.Style.WARN, "No file loaded.")
@@ -397,7 +399,13 @@ class MainActivity : ComponentActivity() {
                 val secs = (System.currentTimeMillis() - started) / 1000
                 say(Console.Style.INFO, "[3/3] finished in ${secs}s, ${text.lines().size} lines, exit $code")
                 ui {
-                    if (text.isBlank()) write(Console.Style.INFO, "(no output)") else writeOutput(text) { tapAddress(it) }
+                    if (onDone != null) {
+                        write(Console.Style.INFO, "(building the diagram from this data, not shown raw)")
+                    } else if (text.isBlank()) {
+                        write(Console.Style.INFO, "(no output)")
+                    } else {
+                        writeOutput(text) { tapAddress(it) }
+                    }
                     if (truncated) {
                         write(
                             Console.Style.WARN,
@@ -412,6 +420,7 @@ class MainActivity : ComponentActivity() {
                 }
                 setIdle()
                 advice(if (code == 0 || truncated) next else Advice.FAILED)
+                onDone?.invoke(text)
             } catch (e: Exception) {
                 running = null
                 setIdle()
@@ -666,6 +675,111 @@ class MainActivity : ComponentActivity() {
                 write(Console.Style.HEADER, "AndroidManifest.xml (decoded)")
                 writeOutput(xml)
             }
+        }
+    }
+
+    // ---- dropdown categories ----------------------------------------------
+
+    /** Opens a list of actions under [anchor]. Each label runs its action when chosen. */
+    private fun dropdown(anchor: View, items: List<Pair<String, () -> Unit>>) {
+        val popup = PopupMenu(this, anchor)
+        items.forEachIndexed { i, item -> popup.menu.add(0, i, i, item.first) }
+        popup.setOnMenuItemClickListener { mi ->
+            items[mi.itemId].second.invoke()
+            true
+        }
+        popup.show()
+    }
+
+    private fun item(label: String, action: () -> Unit): Pair<String, () -> Unit> = Pair(label, action)
+
+    private fun fileMenu(): List<Pair<String, () -> Unit>> = listOf(
+        item("Open a file") { pickFile.launch(arrayOf("*/*")) },
+        item("Save console to a file") { saveLog() },
+        item("Clear the screen") { clearConsole() },
+        item("Encrypt the file with a password (23)") { numbered(23) },
+        item("Decrypt a .r2enc file (24)") { numbered(24) },
+        item("Patch bytes, writes a copy (25)") { numbered(25) },
+    )
+
+    private fun runMenu(): List<Pair<String, () -> Unit>> = listOf(
+        item("Run what is in the box") { runTyped() },
+        item("Analyze the address in the box") { analyzeInput() },
+        item("Block diagram of the code flow (27)") { numbered(27) },
+        item("Stop a running command") { stopRunning(quiet = false) },
+    )
+
+    private fun findMenu(): List<Pair<String, () -> Unit>> = listOf(
+        item("List the functions (12)") { showFunctionMenu() },
+        item("Filter by file type") { showFilterMenu() },
+        item("Find a word: type it after find") {
+            cmdInput.setText("find ")
+            cmdInput.setSelection(cmdInput.text.length)
+            cmdInput.requestFocus()
+        },
+        item("Step-by-step patching guide") { showGuide() },
+        item("radare2 reference with examples (28)") { showReference() },
+    )
+
+    private fun viewMenu(): List<Pair<String, () -> Unit>> = listOf(
+        item("Scroll to the top") { scrollView.fullScroll(ScrollView.FOCUS_UP) },
+        item("Scroll to the bottom") { scrollView.fullScroll(ScrollView.FOCUS_DOWN) },
+        item("Help: list of shortcuts") { showHelp() },
+    )
+
+    // ---- block diagram and reference ---------------------------------------
+
+    private fun showReference() {
+        ui {
+            write(Console.Style.HEADER, "radare2 reference")
+            writeOutput(R2Reference.TEXT)
+        }
+        advice("pick a function from the FIND menu, or type 27 for the block diagram.")
+    }
+
+    /** Analyses the code, then turns radare2's JSON block list into a readable flow. */
+    private fun runBlocks(next: String) {
+        runR2("aaa;s entry0;agfj", next) { raw -> renderBlocks(raw) }
+    }
+
+    private fun renderBlocks(raw: String) {
+        val start = Regex("\\[\\s*\\{").find(raw)?.range?.first
+        if (start == null) {
+            say(Console.Style.WARN, "No block data at the entry point.")
+            advice("run 11 (auto-analyze) first, then 27 again.")
+            return
+        }
+        try {
+            val fn = (JSONTokener(raw.substring(start)).nextValue() as JSONArray).getJSONObject(0)
+            val blocks = fn.getJSONArray("blocks")
+            val text = StringBuilder()
+            text.append("function ${fn.optString("name", "entry0")}: ${blocks.length()} blocks\n")
+            text.append("Each block is a run of instructions with no jumps inside it.\n\n")
+            for (i in 0 until blocks.length()) {
+                val b = blocks.getJSONObject(i)
+                val addr = b.getLong("addr")
+                val jump = b.optLong("jump", -1L)
+                val fail = b.optLong("fail", -1L)
+                text.append("BLOCK ${"0x%08x".format(addr)}  (${b.optLong("size")} bytes)\n")
+                if (jump >= 0) {
+                    val kind = if (jump <= addr) "loop back" else "forward"
+                    text.append("   if true  -> ${"0x%08x".format(jump)}  $kind\n")
+                }
+                if (fail >= 0) {
+                    val kind = if (fail <= addr) "loop back" else "forward"
+                    text.append("   if false -> ${"0x%08x".format(fail)}  $kind\n")
+                }
+                if (jump < 0 && fail < 0) text.append("   ends the function (return)\n")
+                text.append("\n")
+            }
+            ui {
+                write(Console.Style.HEADER, "Block diagram of the code flow")
+                writeOutput(text.toString()) { tapAddress(it) }
+            }
+            advice("tap an address to read the code of that block. 'loop back' means a loop.")
+        } catch (e: Exception) {
+            say(Console.Style.ERROR, "could not read the block data: ${e.message}")
+            advice("run 11 (auto-analyze), then 27 again. If it fails again, use 14 (flow chart).")
         }
     }
 

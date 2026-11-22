@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Landscape: controls in a column on the left (scrollable), output fills the right side. -->
+<!-- Landscape: command box and four dropdown categories in a column on the left, output on the right. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -39,28 +39,20 @@
                 android:orientation="horizontal">
 
                 <Button
-                    android:id="@+id/openButton"
+                    android:id="@+id/fileMenuButton"
                     style="@style/CompactButton"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="Open" />
+                    android:text="FILE ▼" />
 
                 <Button
-                    android:id="@+id/saveButton"
+                    android:id="@+id/runMenuButton"
                     style="@style/CompactButton"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="Save" />
-
-                <Button
-                    android:id="@+id/clearButton"
-                    style="@style/CompactButton"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Clear" />
+                    android:text="RUN ▼" />
             </LinearLayout>
 
             <LinearLayout
@@ -69,80 +61,20 @@
                 android:orientation="horizontal">
 
                 <Button
-                    android:id="@+id/analyzeButton"
+                    android:id="@+id/findMenuButton"
                     style="@style/CompactButton"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="Analyze" />
+                    android:text="FIND ▼" />
 
                 <Button
-                    android:id="@+id/stopButton"
+                    android:id="@+id/viewMenuButton"
                     style="@style/CompactButton"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="Stop" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal">
-
-                <Button
-                    android:id="@+id/functionsButton"
-                    style="@style/CompactButton"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Functions" />
-
-                <Button
-                    android:id="@+id/filterButton"
-                    style="@style/CompactButton"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Filter" />
-
-                <Button
-                    android:id="@+id/guideButton"
-                    style="@style/CompactButton"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Guide" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal">
-
-                <Button
-                    android:id="@+id/topButton"
-                    style="@style/CompactButton"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Top" />
-
-                <Button
-                    android:id="@+id/bottomButton"
-                    style="@style/CompactButton"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Bottom" />
-
-                <Button
-                    android:id="@+id/helpButton"
-                    style="@style/CompactButton"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Help" />
+                    android:text="VIEW ▼" />
             </LinearLayout>
 
             <ProgressBar

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Portrait: output on top (scrolls up/down and sideways), controls grouped at the bottom. -->
+<!-- Portrait: output on top (scrolls up/down and sideways); command box and four dropdown categories at the bottom. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -80,149 +80,43 @@
             android:text="Run" />
     </LinearLayout>
 
-    <!-- Category rows: FILE, RUN, FIND, VIEW. -->
+    <!-- Four categories. Each opens a dropdown list of its actions. -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal">
 
-        <TextView
-            android:layout_width="44dp"
-            android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:text="FILE"
-            android:textSize="11sp"
-            android:textStyle="bold" />
-
         <Button
-            android:id="@+id/openButton"
+            android:id="@+id/fileMenuButton"
             style="@style/CompactButton"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Open" />
+            android:text="FILE ▼" />
 
         <Button
-            android:id="@+id/saveButton"
+            android:id="@+id/runMenuButton"
             style="@style/CompactButton"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Save" />
+            android:text="RUN ▼" />
 
         <Button
-            android:id="@+id/clearButton"
+            android:id="@+id/findMenuButton"
             style="@style/CompactButton"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Clear" />
-    </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal">
-
-        <TextView
-            android:layout_width="44dp"
-            android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:text="RUN"
-            android:textSize="11sp"
-            android:textStyle="bold" />
+            android:text="FIND ▼" />
 
         <Button
-            android:id="@+id/analyzeButton"
+            android:id="@+id/viewMenuButton"
             style="@style/CompactButton"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Analyze" />
-
-        <Button
-            android:id="@+id/stopButton"
-            style="@style/CompactButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Stop" />
-    </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal">
-
-        <TextView
-            android:layout_width="44dp"
-            android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:text="FIND"
-            android:textSize="11sp"
-            android:textStyle="bold" />
-
-        <Button
-            android:id="@+id/functionsButton"
-            style="@style/CompactButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Functions" />
-
-        <Button
-            android:id="@+id/filterButton"
-            style="@style/CompactButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Filter" />
-
-        <Button
-            android:id="@+id/guideButton"
-            style="@style/CompactButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Guide" />
-    </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal">
-
-        <TextView
-            android:layout_width="44dp"
-            android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:text="VIEW"
-            android:textSize="11sp"
-            android:textStyle="bold" />
-
-        <Button
-            android:id="@+id/topButton"
-            style="@style/CompactButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Top" />
-
-        <Button
-            android:id="@+id/bottomButton"
-            style="@style/CompactButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Bottom" />
-
-        <Button
-            android:id="@+id/helpButton"
-            style="@style/CompactButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Help" />
+            android:text="VIEW ▼" />
     </LinearLayout>
 
 </LinearLayout>

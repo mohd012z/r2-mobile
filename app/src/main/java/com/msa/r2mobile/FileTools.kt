@@ -94,6 +94,96 @@ object BytePatch {
     fun hex(bytes: ByteArray): String = bytes.joinToString(" ") { "%02x".format(it.toInt() and 0xFF) }
 }
 
+/** The radare2 reference shown by function 28. */
+object R2Reference {
+    val TEXT = """
+HOW THE OUTPUT IS ARRANGED
+  Address      where the code or data is, e.g. 0x00401000
+  Bytes        the raw machine bytes, e.g. 55 48 89 e5
+  Instruction  what the processor does, e.g. push rbp
+  HINT: lines   warnings only. Most are harmless.
+  done (exit 0) means the command finished.
+
+WHAT YOU TYPE IN THE BOX
+  28             this reference
+  27             block diagram of the code flow
+  0x00401000     analyse that address: function, bytes, code, callers
+  find WORD      search the file for WORD
+  only WORD      show only the last output's lines that contain WORD
+  range S E      show only the last output's lines between addresses S and E
+  any r2 command sent to radare2, e.g.  iI   or   afl~main
+  ;              joins commands:  s 0x401000;pd 10
+  ~              filters inside radare2:  afl~main  keeps functions with main in the name
+  @              runs a command at an address:  px 16 @ 0x401000
+  s ADDRESS      moves the cursor to ADDRESS; the next commands start there
+
+FILE INFO (use these first)
+  i      summary: CPU, bits, operating system, stripped or not
+         example:  i   ->  arch arm   bits 64   stripped false
+  ie     the entry point, where the program starts
+         example:  ie  ->  vaddr 0x00401000
+  iS     sections: .text is code, .data is variables, .rodata is constants
+  il     libraries it needs at runtime
+  ii     imports: functions it calls from outside (open, connect, crypto).
+         These show what the program does.
+  iE     exports: functions it offers to other programs
+  is     symbols: names of functions. Few names = stripped (run aaa).
+  iz     strings in the data sections; izz searches the whole file (slower)
+
+ANALYSIS
+  aaa    analyse everything: find functions and their calls. Run it first on
+         any stripped file. Big files take a while.
+  afl    list all functions: address, size, name
+         example line:  0x00401000  1  42  entry0
+  afi    details of the function at the cursor: size, blocks, calls
+  axt    who points to the address at the cursor (cross-references)
+         example:  s 0x00401010;axt
+  agf    text flow chart of the function at the cursor
+  agfj   the same flow as JSON. Function 27 reads this.
+
+READ CODE
+  pdf    disassemble the whole function at the cursor
+  pd N   disassemble N instructions from the cursor
+         example:  s 0x00401000;pd 12
+  px N   hex dump of N bytes, with text on the side
+         example:  px 32 @ 0x00401000
+
+HOW TO READ ONE CODE LINE
+  0x00401004   3   48 89 e5   mov rbp, rsp
+  address      size  bytes      instruction
+  jmp, je, jne, jz, jnz, jl, jg ...   a jump. The last address on the line is where it goes.
+  call          runs another function
+  ret           returns to the caller
+  colours:  pink = loop back   blue = forward jump   green = short jump in the same block
+            orange = call      teal = return
+  tap any address to see the 24 instructions starting there
+
+OFFSET AND ADDRESS
+  Both are positions shown in hex. In ELF and PE files used here they are usually the same
+  numbers. Use the address exactly as the output shows it.
+
+SEARCH
+  / text         search for text, e.g.  / license
+  /x 4d5a        search for hex bytes; 4d5a is the start of a Windows program (PE)
+  /x 7f454c46    the start of a Linux/Android program (ELF)
+
+SAVE AND CONTROL
+  save     writes the console to a file    clear   empties the screen
+  stop     cancels the running command     help    shows the short shortcut list
+
+EXAMPLE WORKFLOWS
+  1. Unknown file:      1 (info), 2 (summary), 9 (strings)
+  2. Find a feature:    find http -> note an address -> paste it in the box -> RUN
+  3. Understand code:   11 (analyse), 12 (list functions), paste an address, read it
+  4. Follow the flow:   27 (block diagram), then tap an address to read that block
+  5. Check a patch:     25 (patch a copy), then  s ADDRESS;px 16  to see the new bytes
+
+NOT AVAILABLE YET
+  Live tracing while the program runs (needs root or a debugger on the phone).
+  Decoding resources (strings in resources.arsc) and turning classes.dex into smali.
+""".trimIndent()
+}
+
 /** The step-by-step guide shown by function 26. */
 object Guide {
     val PATCHING = """
