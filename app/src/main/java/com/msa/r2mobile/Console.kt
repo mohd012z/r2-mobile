@@ -15,7 +15,7 @@ import android.view.View
  * addresses, errors and advice are easy to tell apart. Only use from the UI thread.
  */
 /** Longest line the console draws. The full line stays in the output file for search and paging. */
-private const val MAX_SHOWN_CHARS = 2_000
+private const val MAX_SHOWN_CHARS = 600
 
 class Console(private val maxChars: Int = 1_000_000) {
 

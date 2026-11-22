@@ -434,6 +434,40 @@ class MainActivity : ComponentActivity() {
 
     // ---- typed input -------------------------------------------------------
 
+    /** hex ADDRESS [BYTES]: a hex dump, 16 bytes per row, with the text beside it. */
+    private fun hexView(arg: String) {
+        val parts = arg.split(Regex("\\s+"))
+        val addr = parts.getOrNull(0).orEmpty()
+        val count = parts.getOrNull(1)?.toIntOrNull()?.coerceIn(16, 1024) ?: 128
+        if (!ADDRESS_INPUT.matches(addr)) {
+            say(Console.Style.WARN, "Use: hex 0x27636 128   (an address, then how many bytes, 16 to 1024)")
+            advice("find an address first with  offset NAME  or  find WORD  or  findhex 90 90.")
+            return
+        }
+        runR2("s $addr;px $count", "each row: address, 16 bytes in hex, then the same bytes as text. Change the count to read more.")
+    }
+
+    /** findhex BYTES: finds a hex byte pattern, for example  findhex 1f2003d5  (spaces are allowed). */
+    private fun findHex(arg: String) {
+        val bytes = arg.replace(Regex("\\s+"), "").lowercase()
+        if (bytes.isEmpty() || bytes.length % 2 != 0 || !bytes.all { it in "0123456789abcdef" }) {
+            say(Console.Style.WARN, "Use: findhex 1f 20 03 d5   (pairs of hex digits, 0 to 9 and a to f)")
+            advice("type  findhex  followed by the bytes you want to find.")
+            return
+        }
+        runR2("/x $bytes", "tap an address in the result, or type  hex ADDRESS 128  to read the bytes around it.")
+    }
+
+    /** offset NAME: the address of a symbol or import whose name contains NAME. */
+    private fun offsetOf(name: String) {
+        if (!Regex("[A-Za-z0-9_.@$-]+").matches(name)) {
+            say(Console.Style.WARN, "Use: offset NAME   (letters, digits, _ . - only), e.g.  offset main")
+            advice("type  functions  to see the names the file has.")
+            return
+        }
+        runR2("is~$name", "the first column is the address. Type  hex ADDRESS 128  to read the code or data there.")
+    }
+
     private fun runTyped() {
         val text = cmdInput.text.toString().trim()
         if (text.isEmpty()) return
@@ -460,6 +494,9 @@ class MainActivity : ComponentActivity() {
             lower == "decompile" || lower.startsWith("decompile ") -> decompile(text.substring(9).trim())
             lower.startsWith("range ") -> rangeFilter(text.substring(6).trim())
             lower == "save" -> saveLog()
+            lower.startsWith("hex ") -> hexView(text.substring(4).trim())
+            lower.startsWith("findhex ") -> findHex(text.substring(8).trim())
+            lower.startsWith("offset ") -> offsetOf(text.substring(7).trim())
             lower.startsWith("find ") -> {
                 val word = text.substring(5).trim()
                 if (word.isEmpty()) {
@@ -1775,7 +1812,7 @@ class MainActivity : ComponentActivity() {
     companion object {
         private val DEX_NAME = Regex("classes\\d*\\.dex")
         /** Lines shown on screen at once; the full output stays in a file. */
-        private const val DISPLAY_LINES = 3_000
+        private const val DISPLAY_LINES = 500
         private const val MAX_LINE_CHARS = 4_000
         private const val MAX_TEXT_CHARS = 2_000_000
         private const val MAX_SO_BYTES = 256L * 1024 * 1024

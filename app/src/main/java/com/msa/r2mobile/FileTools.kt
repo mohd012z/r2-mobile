@@ -109,7 +109,7 @@ WHAT YOU TYPE IN THE BOX
   27             block diagram of the code flow
   0x00401000     analyse that address: function, bytes, code, callers
   find WORD      search the file for WORD
-  page 2         shows the next 3000 lines of a long output (page 1 = the start)
+  page 2         shows the next 500 lines of a long output (page 1 = the start)
   only WORD      show only the last output's lines that contain WORD
   range S E      show only the last output's lines between addresses S and E
   any r2 command sent to radare2, e.g.  iI   or   afl~main
