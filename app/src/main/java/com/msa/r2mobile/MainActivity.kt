@@ -607,7 +607,7 @@ class MainActivity : ComponentActivity() {
                 }
                 setIdle()
                 advice(if (code == 0) next else Advice.FAILED)
-                onDone?.invoke(if (outFile.length() < 8_000_000L) outFile.readText() else "")
+                onDone?.invoke(cappedText(outFile))
             } catch (e: Exception) {
                 running = null
                 setIdle()
@@ -789,6 +789,17 @@ class MainActivity : ComponentActivity() {
     }
 
     /** The first [DISPLAY_LINES] lines of [file], for the screen. */
+    /** Text of [file] for the app's own use, limited to [MAX_TEXT_CHARS]. Never loads the whole file. */
+    private fun cappedText(file: File): String {
+        val sb = StringBuilder()
+        forEachLine(file) { line ->
+            if (sb.length + line.length + 1 > MAX_TEXT_CHARS) return@forEachLine false
+            sb.append(line).append('\n')
+            true
+        }
+        return sb.toString()
+    }
+
     private fun displayHead(file: File): String {
         val head = ArrayList<String>()
         forEachLine(file) { line ->
@@ -1766,6 +1777,7 @@ class MainActivity : ComponentActivity() {
         /** Lines shown on screen at once; the full output stays in a file. */
         private const val DISPLAY_LINES = 3_000
         private const val MAX_LINE_CHARS = 4_000
+        private const val MAX_TEXT_CHARS = 2_000_000
         private const val MAX_SO_BYTES = 256L * 1024 * 1024
         /** Hard cap on one radare2 run's output file. */
         private const val MAX_OUTPUT_BYTES = 512L * 1024 * 1024
