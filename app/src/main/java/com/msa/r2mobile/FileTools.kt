@@ -178,6 +178,22 @@ EXAMPLE WORKFLOWS
   4. Follow the flow:   27 (block diagram), then tap an address to read that block
   5. Check a patch:     25 (patch a copy), then  s ADDRESS;px 16  to see the new bytes
 
+ARM64 AND ARM32 (phone processors)
+  arm64 (armv8, 64-bit, most new phones). Every instruction is 4 bytes.
+    NOP   1f 20 03 d5   does nothing
+    RET   c0 03 5f d6   return to the caller (the one-line function exit)
+    cmp w0, #0   then   b.eq 0x...   jump if equal (TRUE branch); if not equal the code
+                                    just continues (FALSE branch)
+  arm32 (armeabi-v7a, 32-bit, older phones). Normal instructions are 4 bytes; Thumb
+  instructions are 2 bytes. Check which one the file uses with the  i  command.
+    NOP (ARM)     00 00 a0 e1     does nothing
+    RET (ARM)     1e ff 2f e1     bx lr: return to the caller
+    RET (Thumb)   70 47           bx lr: return to the caller
+    NOP (Thumb)   00 bf           does nothing
+    cmp r0, #0   then   beq 0x... jump if equal (TRUE); otherwise the code continues (FALSE)
+  How to tell TRUE from FALSE: after a compare, a conditional jump is the TRUE path.
+  The next instruction in the list is the FALSE path.
+
 NOT AVAILABLE YET
   Live tracing while the program runs (needs root or a debugger on the phone).
   Decoding resources (strings in resources.arsc) and turning classes.dex into smali.

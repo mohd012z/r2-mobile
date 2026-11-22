@@ -7,6 +7,8 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.OpenableColumns
 import android.text.InputType
+import android.util.TypedValue
+import android.view.ScaleGestureDetector
 import android.text.method.LinkMovementMethod
 import android.view.View
 import android.view.inputmethod.EditorInfo
@@ -86,6 +88,20 @@ class MainActivity : ComponentActivity() {
         progressBar = findViewById(R.id.progressBar)
         statusText = findViewById(R.id.statusText)
         outputText.movementMethod = LinkMovementMethod.getInstance()
+
+        // Pinch with two fingers on the console to make the text bigger or smaller.
+        val density = resources.displayMetrics.scaledDensity
+        val zoom = ScaleGestureDetector(this, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            override fun onScale(detector: ScaleGestureDetector): Boolean {
+                val px = (outputText.textSize * detector.scaleFactor).coerceIn(8f * density, 40f * density)
+                outputText.setTextSize(TypedValue.COMPLEX_UNIT_PX, px)
+                return true
+            }
+        })
+        scrollView.setOnTouchListener { _, event ->
+            zoom.onTouchEvent(event)
+            false
+        }
 
         findViewById<Button>(R.id.runButton).setOnClickListener { runTyped() }
         findViewById<Button>(R.id.functionsPickButton).setOnClickListener { showFunctionMenu() }
@@ -272,6 +288,7 @@ class MainActivity : ComponentActivity() {
             ADDRESS_INPUT.matches(text) -> analyzeAddress(text)
             text.toIntOrNull() != null -> numbered(text.toInt())
             lower == "help" || lower == "?" -> showHelp()
+            lower == "conv" || lower.startsWith("conv ") -> convert(text.substring(4))
             lower == "clear" -> clearConsole()
             lower == "stop" -> stopRunning(quiet = false)
             lower == "status" -> showStatus()
@@ -676,6 +693,30 @@ class MainActivity : ComponentActivity() {
                 write(Console.Style.HEADER, "AndroidManifest.xml (decoded)")
                 writeOutput(xml)
             }
+        }
+    }
+
+    // ---- converters ---------------------------------------------------------
+
+    private fun convert(args: String) {
+        if (args.isBlank() || args.trim() == "help") {
+            ui {
+                write(Console.Style.HEADER, "Converters")
+                writeOutput(Converter.HELP)
+            }
+            advice("try  conv hex 0x1F  or  conv epoch 1700000000")
+            return
+        }
+        try {
+            val lines = Converter.run(args)
+            ui {
+                write(Console.Style.HEADER, "conv ${args.trim()}")
+                lines.forEach { write(Console.Style.OUTPUT, it) }
+            }
+            advice("type  conv help  for all converters. Results are in the console above.")
+        } catch (e: Exception) {
+            say(Console.Style.ERROR, "conv: ${e.message ?: "that value is not valid"}")
+            advice("examples: conv hex 0x1F,  conv epoch 1700000000,  conv b64e hello")
         }
     }
 
