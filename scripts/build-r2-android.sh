@@ -4,7 +4,7 @@
 set -euo pipefail
 
 : "${ANDROID_NDK_HOME:?set ANDROID_NDK_HOME to your NDK directory}"
-API=26
+API=28
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 WORK="${WORK:-$HERE/build-r2}"
 TOOLCHAIN="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
