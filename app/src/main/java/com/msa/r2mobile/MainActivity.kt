@@ -392,6 +392,8 @@ class MainActivity : ComponentActivity() {
             lower.startsWith("method ") -> containsFilter("method", text.substring(7).trim())
             lower.startsWith("class ") -> containsFilter("class", text.substring(6).trim())
             lower == "translate" -> translateLast()
+            lower == "dex" -> dexInspect()
+            lower == "decompile" || lower.startsWith("decompile ") -> decompile(text.substring(9).trim())
             lower.startsWith("range ") -> rangeFilter(text.substring(6).trim())
             lower == "save" -> saveLog()
             lower.startsWith("find ") -> {
@@ -1137,6 +1139,49 @@ class MainActivity : ComponentActivity() {
         showPlan(category)
     }
 
+    /** Lists classes, methods and readable strings of the loaded classes.dex. Read-only. */
+    private fun dexInspect() {
+        val path = targetPath
+        if (path == null) {
+            say(Console.Style.WARN, "no file loaded.")
+            advice("open a classes.dex with FILE > Open, or extract one from an APK with 21.")
+            return
+        }
+        if (loaded != FileCategory.DEX) {
+            say(Console.Style.WARN, "the loaded file is ${loaded?.label ?: "unknown"}. The DEX inspector needs a classes.dex.")
+            advice("for an APK, type 21 first to extract classes.dex, then type dex.")
+            return
+        }
+        worker.execute {
+            try {
+                val lines = DexReader.report(File(path))
+                ui {
+                    write(Console.Style.HEADER, "DEX inspector")
+                    writeOutput(lines.joinToString("\n"))
+                }
+                advice("type  method NAME  or  class NAME  or  regex PATTERN  to narrow the lists.")
+            } catch (e: Exception) {
+                say(Console.Style.ERROR, "DEX read failed: ${e.message}")
+                advice("the file may be damaged or not a DEX file.")
+            }
+        }
+    }
+
+    /** Runs radare2's built-in pseudo-C decompiler (pdc) at an address, or at the entry point. */
+    private fun decompile(arg: String) {
+        if (arg.isNotEmpty() && !ADDRESS_INPUT.matches(arg)) {
+            say(Console.Style.WARN, "use: decompile 0x1234, or decompile on its own for the entry point.")
+            advice("copy an address from FUNCTIONS (12) or the output, then type  decompile 0x...")
+            return
+        }
+        if (loaded == FileCategory.DEX) {
+            say(Console.Style.WARN, "pdc decompiles native code (.so, ELF, PE). For a DEX file type dex instead.")
+            return
+        }
+        val where = if (arg.isEmpty()) "entry0" else arg
+        runR2("s $where;pdc", "read the pseudo-C above. Use  / word  to find a string or a call, or FUNCTIONS > disassembly (13) to compare.")
+    }
+
     // ---- DEX tools: regex, method and class filters, Java name translation ----
 
     private fun typeInBox(text: String) {
@@ -1236,6 +1281,8 @@ class MainActivity : ComponentActivity() {
             cmdInput.setSelection(cmdInput.text.length)
             cmdInput.requestFocus()
         },
+        item("DEX inspector: classes, methods, strings (type dex)") { dexInspect() },
+        item("Decompile a native function to C-like code (type decompile)") { typeInBox("decompile ") },
         item("DEX: list classes (ic)") { runR2("ic", "type  regex Lcom/  or  class NAME  to narrow the list.") },
         item("DEX: filter by method name") { typeInBox("method ") },
         item("DEX: filter by class name") { typeInBox("class ") },
