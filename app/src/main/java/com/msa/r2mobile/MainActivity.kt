@@ -95,11 +95,10 @@ class MainActivity : ComponentActivity() {
 
     /** Applies the View settings: console text size and button text size. */
     private fun applyView() {
-        val p = ViewConfig.palette()
         outputText.textSize = ViewConfig.consoleText
         outputText.typeface = ViewConfig.typeface()
-        outputText.setTextColor(p.text)
-        (outputText.parent as? View)?.setBackgroundColor(p.bg)
+        outputText.setTextColor(ViewConfig.consoleFg())
+        (outputText.parent as? View)?.setBackgroundColor(ViewConfig.consoleBg())
         ViewConfig.applyButtons(window.decorView)
     }
 
@@ -210,6 +209,14 @@ class MainActivity : ComponentActivity() {
 
     // ---- loading -----------------------------------------------------------
 
+    /** After a file is loaded: what to read and what to find, for this file type. */
+    private fun showPlan(category: FileCategory) {
+        ui {
+            write(Console.Style.HEADER, "WHAT TO DO NEXT (${category.label})")
+            Advice.plan(category).forEach { write(Console.Style.INFO, it) }
+        }
+    }
+
     private fun loadFile(uri: Uri) {
         try {
             val name = displayName(uri)
@@ -226,6 +233,7 @@ class MainActivity : ComponentActivity() {
             say(Console.Style.OK, "loaded $name (${dest.length()} bytes)")
             say(Console.Style.INFO, "type: ${category.label}. Filter set to this type.")
             advice(Advice.afterOpen(category))
+            showPlan(category)
         } catch (e: Exception) {
             say(Console.Style.ERROR, "load error: ${e.message}")
             advice("try OPEN again. Very large files need free memory on the phone.")
@@ -1118,6 +1126,7 @@ class MainActivity : ComponentActivity() {
         filter = category
         say(Console.Style.OK, "loaded ${f.name} (${category.label})")
         advice("tap FUNCTIONS to pick a step, or type a number in the box and press RUN.")
+        showPlan(category)
     }
 
     // ---- DEX tools: regex, method and class filters, Java name translation ----

@@ -6,6 +6,9 @@ import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
 import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import android.provider.Settings
 import android.os.Bundle
 import android.text.InputType
 import android.view.MotionEvent
@@ -42,8 +45,8 @@ class FileManagerActivity : Activity() {
     private data class Storage(val label: String, val dir: File)
 
     /** One folder pane. [top] is the storage place it may not leave. */
-    private inner class Pane(var top: File, var topLabel: String) {
-        var dir: File = top
+    private inner class Pane(var top: File, var topLabel: String, start: File = top) {
+        var dir: File = start
         val marked = LinkedHashSet<File>()
         /** Search results shown instead of the folder, or null when browsing. */
         var search: List<File>? = null
@@ -69,6 +72,7 @@ class FileManagerActivity : Activity() {
                 }
                 v.setTextColor(p.text)
                 v.setPadding(16, 12, 16, 12)
+                v.minHeight = (52 * resources.displayMetrics.density).toInt()
                 v.setBackgroundColor(if (f != null && f in marked) p.mark else Color.TRANSPARENT)
                 return v
             }
@@ -147,8 +151,9 @@ class FileManagerActivity : Activity() {
             adapter.notifyDataSetChanged()
 
             val p = ViewConfig.palette()
-            header.setBackgroundColor(p.header)
-            header.setTextColor(p.text)
+            val isActive = active === this@Pane
+            header.setBackgroundColor(if (isActive) 0xFF2979FF.toInt() else p.header)
+            header.setTextColor(if (isActive) Color.WHITE else p.text)
             list.setBackgroundColor(p.bg)
             header.text = if (results != null) {
                 "SEARCH in $topLabel: ${results.size} found   marked ${marked.size}"
@@ -181,9 +186,10 @@ class FileManagerActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         ViewConfig.load(this)
-        val first = storages().first()
-        left = Pane(first.dir, first.label)
-        right = Pane(filesDir, "App private folder")
+        val phone = storages().first().dir
+        val start = File("/storage/emulated/0").takeIf { it.isDirectory } ?: phone
+        left = Pane(phone, "Phone storage", start)
+        right = Pane(phone, "Phone storage", start)
         active = left
         detector = ScaleGestureDetector(this, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
             override fun onScale(d: ScaleGestureDetector): Boolean {
@@ -202,6 +208,7 @@ class FileManagerActivity : Activity() {
         }
         setContentView(root)
         buildLayout()
+        if (!hasAllFilesAccess()) askAllFilesAccess()
     }
 
     override fun onDestroy() {
@@ -218,6 +225,7 @@ class FileManagerActivity : Activity() {
     /** Storage places this phone shows: shared internal, app private, and any SD card. */
     private fun storages(): List<Storage> {
         val list = mutableListOf<Storage>()
+        File("/storage").takeIf { it.isDirectory }?.let { list += Storage("Phone storage (all, unrooted)", it) }
         val shared = File("/storage/emulated/0")
         if (shared.isDirectory) list += Storage("Internal storage (phone shared)", shared)
         list += Storage("App private folder", filesDir)
@@ -244,6 +252,21 @@ class FileManagerActivity : Activity() {
                 p.go(list[i].dir)
             }
             .setNegativeButton("Close", null)
+            .show()
+    }
+
+    private fun hasAllFilesAccess(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.R || Environment.isExternalStorageManager()
+
+    /** Android hides most files from apps until the user grants 'All files access' for this app. */
+    private fun askAllFilesAccess() {
+        AlertDialog.Builder(this)
+            .setTitle("Allow all files access")
+            .setMessage("Android hides most files from apps until you allow it. Tap Open settings, then switch on 'Allow access to all files' for R2 Mobile, then come back.")
+            .setPositiveButton("Open settings") { _, _ ->
+                startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:$packageName")))
+            }
+            .setNegativeButton("Later", null)
             .show()
     }
 
@@ -338,6 +361,7 @@ class FileManagerActivity : Activity() {
             "Search in this pane" to { searchDialog() },
             "Open in R2 console (one file)" to { openInR2() },
             "Settings: text, buttons, layout" to { ViewConfig.dialog(this) { buildLayout() } },
+            "Allow all files access (see every file)" to { askAllFilesAccess() },
             "Refresh" to { refreshBoth() },
         )
         AlertDialog.Builder(this)

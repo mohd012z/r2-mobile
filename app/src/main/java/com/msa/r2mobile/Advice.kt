@@ -44,6 +44,42 @@ object Advice {
             "type 15 (hex dump) in the box to see the first bytes, or 9 for readable text."
     }
 
+    /** What to read and what to find after a file of this type is loaded. */
+    fun plan(category: FileCategory): List<String> = when (category) {
+        FileCategory.APK -> listOf(
+            "READ 1: type 1 for file info, then 20 to list what is inside the APK.",
+            "READ 2: type 22 to decode AndroidManifest.xml. Read the permissions (INTERNET, CAMERA, SMS, LOCATION).",
+            "READ 3: type 21 to extract classes.dex. Then use DEX: list classes, filter by method, translate.",
+            "FIND: type 18 (search http) for web addresses, then 9 for readable text such as messages and keys.",
+            "FIND: type  / license  or  / signature  or  / verify  to find licence and signature checks.",
+        )
+        FileCategory.DEX -> listOf(
+            "READ 1: type 1 for file info, then 11 (auto-analyze) before the function lists.",
+            "READ 2: DEX menu > list classes (ic). Pick a class, then read its methods.",
+            "FIND: type  method NAME  or  class NAME  or  regex PATTERN  to narrow the output.",
+            "FIND: type  translate  to show Java names instead of Ljava/lang/String; style names.",
+        )
+        FileCategory.ELF_SHARED, FileCategory.ELF_EXEC, FileCategory.PE, FileCategory.MACHO -> listOf(
+            "READ 1: type 2 (binary summary) to see the CPU, bit width and whether it is stripped.",
+            "READ 2: type 4 (sections) and 3 (entry point). The .text section holds the code.",
+            "READ 3: type 11 (auto-analyze), then 12 (list functions). Wait until the output stops.",
+            "READ 4: type 13 to read the first instructions. Tap any address to read that code.",
+            "FIND: type 6 (imports) to see what it calls, e.g. open, connect, SSL. This shows files and network use.",
+            "FIND: type 9 (readable text), then  / http  or  / key  or  / error  to find words in the file.",
+            "FIND: type 27 (block diagram) to see the if and loop structure at the entry point.",
+        )
+        FileCategory.JAR, FileCategory.ZIP -> listOf(
+            "READ 1: type 20 to list the archive contents.",
+            "READ 2: use the file manager (Actions > Extract archive) to unpack it, then load the file you need.",
+            "FIND: type 9 for readable text, then  / word  to search for a name or a key.",
+        )
+        FileCategory.IMAGE, FileCategory.PDF, FileCategory.UNKNOWN -> listOf(
+            "READ 1: type 15 (hex dump) for the first bytes. They name the file type, e.g. 89 50 4e 47 is PNG, 25 50 44 46 is PDF.",
+            "READ 2: type 9 for readable text such as messages, web addresses and keys.",
+            "FIND: type  / http  or  / yourword  to search the file for a word.",
+        )
+    }
+
     fun wrongType(category: FileCategory): String =
         "your file is ${category.label}. Tap FUNCTIONS to see only the steps that work on it."
 }

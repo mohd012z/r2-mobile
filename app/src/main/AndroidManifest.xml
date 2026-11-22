@@ -3,6 +3,12 @@
 
     <!-- No INTERNET permission: the tool runs fully offline. -->
 
+    <!-- Lets the file manager list every file on the phone (Android 11+ asks the user once in settings). -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+
     <application
         android:label="R2 Mobile"
         android:icon="@mipmap/ic_launcher"

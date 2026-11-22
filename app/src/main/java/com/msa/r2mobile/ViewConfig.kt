@@ -2,18 +2,22 @@ package com.msa.r2mobile
 
 import android.app.AlertDialog
 import android.content.Context
+import android.graphics.Color
 import android.graphics.Typeface
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.CheckBox
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.SeekBar
 import android.widget.TextView
 
 /**
- * View template: font, colour template, text sizes, hidden files and the pane split.
+ * View template: font, colour template, console colours (hex codes), text sizes, hidden files and the pane split.
  * Saved on this device and shared by the console and the file manager.
  */
 object ViewConfig {
@@ -22,6 +26,8 @@ object ViewConfig {
     const val DEFAULT_FILE = 14f
     const val DEFAULT_CONSOLE = 12f
     const val DEFAULT_BUTTON = 12f
+    const val DEFAULT_CONSOLE_BG = "#0B0F14"
+    const val DEFAULT_CONSOLE_FG = "#C9D1D9"
 
     val FONT_NAMES = listOf("Monospace", "Sans-serif", "Serif")
     val THEME_NAMES = listOf("Dark", "Light", "Green terminal", "Blue")
@@ -31,6 +37,9 @@ object ViewConfig {
     var fileText = DEFAULT_FILE
     var consoleText = DEFAULT_CONSOLE
     var buttonText = DEFAULT_BUTTON
+    /** Console background and text colour as hex codes, for example #0B0F14. */
+    var consoleBgHex = DEFAULT_CONSOLE_BG
+    var consoleFgHex = DEFAULT_CONSOLE_FG
     var showHidden = true
     /** true = panes side by side with a vertical divider; false = stacked with a horizontal divider. */
     var sideBySide = true
@@ -51,12 +60,25 @@ object ViewConfig {
         else -> Typeface.MONOSPACE
     }
 
+    fun consoleBg(): Int = parseHex(consoleBgHex, DEFAULT_CONSOLE_BG)
+    fun consoleFg(): Int = parseHex(consoleFgHex, DEFAULT_CONSOLE_FG)
+
+    fun isHex(text: String): Boolean = Regex("#[0-9A-Fa-f]{6}").matches(text)
+
+    private fun parseHex(hex: String, fallback: String): Int = try {
+        Color.parseColor(if (isHex(hex)) hex else fallback)
+    } catch (e: IllegalArgumentException) {
+        Color.parseColor(fallback)
+    }
+
     fun resetDefaults() {
         fontIndex = 0
         themeIndex = 0
         fileText = DEFAULT_FILE
         consoleText = DEFAULT_CONSOLE
         buttonText = DEFAULT_BUTTON
+        consoleBgHex = DEFAULT_CONSOLE_BG
+        consoleFgHex = DEFAULT_CONSOLE_FG
         showHidden = true
         sideBySide = true
     }
@@ -68,6 +90,8 @@ object ViewConfig {
         fileText = p.getFloat("file", DEFAULT_FILE)
         consoleText = p.getFloat("console", DEFAULT_CONSOLE)
         buttonText = p.getFloat("button", DEFAULT_BUTTON)
+        consoleBgHex = p.getString("consoleBg", DEFAULT_CONSOLE_BG) ?: DEFAULT_CONSOLE_BG
+        consoleFgHex = p.getString("consoleFg", DEFAULT_CONSOLE_FG) ?: DEFAULT_CONSOLE_FG
         showHidden = p.getBoolean("hidden", true)
         sideBySide = p.getBoolean("side", true)
     }
@@ -79,6 +103,8 @@ object ViewConfig {
             .putFloat("file", fileText)
             .putFloat("console", consoleText)
             .putFloat("button", buttonText)
+            .putString("consoleBg", consoleBgHex)
+            .putString("consoleFg", consoleFgHex)
             .putBoolean("hidden", showHidden)
             .putBoolean("side", sideBySide)
             .apply()
@@ -97,7 +123,7 @@ object ViewConfig {
      * Defaults resets every value to the built-in default and saves it.
      */
     fun dialog(ctx: Context, onChanged: () -> Unit) {
-        val beforeChoice = listOf(fontIndex, themeIndex)
+        val before = listOf(fontIndex, themeIndex, consoleBgHex, consoleFgHex)
         val beforeSizes = listOf(fileText, consoleText, buttonText)
         val beforeFlags = listOf(showHidden, sideBySide)
 
@@ -122,6 +148,12 @@ object ViewConfig {
         box.addView(heading(ctx, "Appearance (console and file manager)"))
         box.addView(fontButton)
         box.addView(themeButton)
+
+        box.addView(heading(ctx, "Console colours (hex code, e.g. #0B0F14)"))
+        box.addView(TextView(ctx).apply { text = "Background" })
+        box.addView(hexBox(ctx, consoleBgHex) { consoleBgHex = it })
+        box.addView(TextView(ctx).apply { text = "Text" })
+        box.addView(hexBox(ctx, consoleFgHex) { consoleFgHex = it })
 
         box.addView(heading(ctx, "Console"))
         box.addView(slider(ctx, "Console text", consoleText, 8, 24) { consoleText = it })
@@ -155,8 +187,10 @@ object ViewConfig {
                 onChanged()
             }
             .setNegativeButton("Cancel") { _, _ ->
-                fontIndex = beforeChoice[0]
-                themeIndex = beforeChoice[1]
+                fontIndex = before[0]
+                themeIndex = before[1]
+                consoleBgHex = before[2]
+                consoleFgHex = before[3]
                 fileText = beforeSizes[0]
                 consoleText = beforeSizes[1]
                 buttonText = beforeSizes[2]
@@ -165,6 +199,26 @@ object ViewConfig {
                 onChanged()
             }
             .show()
+    }
+
+    /** A box for a colour code. Only a valid #RRGGBB code is kept; anything else shows an error. */
+    private fun hexBox(ctx: Context, initial: String, set: (String) -> Unit): EditText = EditText(ctx).apply {
+        setText(initial)
+        hint = "#RRGGBB"
+        setSingleLine(true)
+        addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: Editable?) {
+                val v = s?.toString()?.trim().orEmpty()
+                if (isHex(v)) {
+                    set(v)
+                    setError(null)
+                } else {
+                    setError("use #RRGGBB, for example #0B0F14")
+                }
+            }
+        })
     }
 
     private fun heading(ctx: Context, text: String): TextView = TextView(ctx).apply {
