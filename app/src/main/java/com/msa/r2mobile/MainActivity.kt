@@ -160,6 +160,7 @@ class MainActivity : ComponentActivity() {
         findViewById<Button>(R.id.tabMenuButton).setOnClickListener { dropdown(it, tabMenu()) }
         findViewById<Button>(R.id.addTabButton).setOnClickListener { addTab() }
         findViewById<Button>(R.id.viewMenuButton).setOnClickListener { dropdown(it, viewMenu()) }
+        findViewById<Button>(R.id.pluginMenuButton).setOnClickListener { dropdown(it, pluginMenu()) }
         cmdInput.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_GO || actionId == EditorInfo.IME_ACTION_DONE) {
                 runTyped()
@@ -867,6 +868,7 @@ class MainActivity : ComponentActivity() {
             R.id.runMenuButton to "#00C853",        // RUN menu: green
             R.id.findMenuButton to "#FF9100",       // FIND: orange
             R.id.viewMenuButton to "#AA00FF",       // VIEW: purple
+            R.id.pluginMenuButton to "#FFD600",     // PLUGINS: yellow
             R.id.fullscreenButton to "#607D8B",     // FULL: slate
             R.id.tabMenuButton to "#00897B",        // TAB: teal
             R.id.addTabButton to "#00897B",         // +: teal
@@ -1312,6 +1314,38 @@ class MainActivity : ComponentActivity() {
         item("NEXT step: what should I do now?") { nextStep() },
         item("Step-by-step patching guide") { showGuide() },
         item("radare2 reference with examples (28)") { showReference() },
+    )
+
+    /** Radare2 plugins: each one is a ready-made radare2 command, run inside the bundled engine. */
+    private fun pluginMenu(): List<Pair<String, () -> Unit>> = listOf(
+        item("Hash: MD5 and SHA-256 of the file") {
+            runR2("ph md5 \$s; ph sha256 \$s", "compare the hash with the one published by the vendor to confirm the file is unchanged.")
+        },
+        item("Entropy map (high = packed or encrypted)") {
+            runR2("p=e 256", "a flat high bar usually means packed or encrypted code. Use  izz  to look for readable text.")
+        },
+        item("File header and format info (iI)") {
+            runR2("iI", "check arch, bits and stripped. Next: plugin  Sections with permissions.")
+        },
+        item("Sections with permissions (iS)") {
+            runR2("iS", "look for a section that is both writable and executable (perm rwx): it is a common place for patches.")
+        },
+        item("Imports: what the code calls outside itself (ii)") {
+            runR2("ii", "tap an address, or type  find NAME  to see where an import is used.")
+        },
+        item("Exports: what the file offers to others (iE)") {
+            runR2("iE", "exports are good starting points for reading the code.")
+        },
+        item("Strings: readable text in the file (izz)") {
+            runR2("izz", "type  find WORD  to find one string; tap its address to read the code around it.")
+        },
+        item("Hex dump of the first 128 bytes (px)") {
+            runR2("px 128", "the first bytes show the file type: 7f454c46 = ELF, 4d5a = PE, 504b = ZIP/APK.")
+        },
+        item("Who calls the entry point (axt entry0)") {
+            runR2("axt entry0", "tap an address to read the caller.")
+        },
+        item("Pseudo-C of the entry point (pdc)") { decompile("") },
     )
 
     private fun viewMenu(): List<Pair<String, () -> Unit>> = listOf(
