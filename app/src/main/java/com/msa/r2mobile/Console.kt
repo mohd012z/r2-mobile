@@ -4,8 +4,11 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.text.SpannableStringBuilder
 import android.text.Spanned
+import android.text.TextPaint
+import android.text.style.ClickableSpan
 import android.text.style.ForegroundColorSpan
 import android.text.style.StyleSpan
+import android.view.View
 
 /**
  * Command-prompt style console: every piece of text has a colour, so commands, output,
@@ -24,10 +27,21 @@ class Console(private val maxChars: Int = 200_000) {
         OK("#6A9955", true),
         ADVICE("#4FC1FF", true),   // "NEXT:" guidance
         INFO("#9CDCFE"),
+        LOOP("#FF7AB2", true),        // jump back to an earlier address: a loop
+        BRANCH("#82AAFF"),            // jump forward: an if, else or switch
+        SAME_BLOCK("#C3E88D"),        // short jump ahead inside the same block
+        CALL("#F78C6C", true),        // call: runs another function
+        RETURN("#7FDBCA", true),      // ret: leaves the function
     }
 
     private val buf = SpannableStringBuilder()
     private val addressRx = Regex("0x[0-9a-fA-F]+")
+    /** A disassembly line starts with its address. */
+    private val lineAddrRx = Regex("^\\s*0x[0-9a-fA-F]+")
+    /** Instruction names that change the flow of the program. */
+    private val mnemonicRx = Regex(
+        "\\s(ret|call|bl|jmp|je|jne|jz|jnz|ja|jae|jb|jbe|jg|jge|jl|jle|js|jns|cbz|cbnz|tbz|tbnz|b\\.[a-z]{2}|b)\\b"
+    )
 
     fun write(style: Style, text: String, newline: Boolean = true) {
         val start = buf.length
@@ -45,17 +59,55 @@ class Console(private val maxChars: Int = 200_000) {
         trim()
     }
 
-    /** Writes radare2 output line by line, colouring addresses so they stand out. */
-    fun writeOutput(text: String) {
+    /**
+     * Writes radare2 output line by line. Every address is a tap target that calls [onAddress].
+     * Disassembly lines are coloured by kind: loop, forward branch, same-block jump, call, return.
+     */
+    fun writeOutput(text: String, onAddress: (String) -> Unit = {}) {
         text.trimEnd('\n').lines().forEach { line ->
+            val style = lineStyle(line)
             var last = 0
             addressRx.findAll(line).forEach { m ->
-                write(Style.OUTPUT, line.substring(last, m.range.first), newline = false)
-                write(Style.ADDRESS, m.value, newline = false)
+                if (m.range.first > last) write(style, line.substring(last, m.range.first), newline = false)
+                writeTap(m.value, onAddress)
                 last = m.range.last + 1
             }
-            write(Style.OUTPUT, line.substring(last))
+            write(style, line.substring(last))
         }
+    }
+
+    private fun lineStyle(line: String): Style {
+        if (!lineAddrRx.containsMatchIn(line)) return Style.OUTPUT
+        val op = mnemonicRx.find(line)?.groupValues?.get(1) ?: return Style.OUTPUT
+        if (op == "ret") return Style.RETURN
+        if (op == "call" || op == "bl") return Style.CALL
+        val addrs = addressRx.findAll(line).map { it.value }.toList()
+        val here = addrs.firstOrNull()?.let(::parseAddr)
+        val target = addrs.lastOrNull()?.let(::parseAddr)
+        if (addrs.size < 2 || here == null || target == null) return Style.BRANCH
+        return when {
+            target < here -> Style.LOOP
+            (target - here) in 0L..16L -> Style.SAME_BLOCK
+            else -> Style.BRANCH
+        }
+    }
+
+    private fun parseAddr(s: String): Long? = s.removePrefix("0x").toLongOrNull(16)
+
+    /** An address that runs [onAddress] when tapped. */
+    private fun writeTap(addr: String, onAddress: (String) -> Unit) {
+        val start = buf.length
+        buf.append(addr)
+        buf.setSpan(
+            ForegroundColorSpan(Color.parseColor(Style.ADDRESS.hex)),
+            start, buf.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+        )
+        buf.setSpan(object : ClickableSpan() {
+            override fun onClick(widget: View) = onAddress(addr)
+            override fun updateDrawState(ds: TextPaint) {
+                ds.isUnderlineText = true
+            }
+        }, start, buf.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
     }
 
     fun clear() {

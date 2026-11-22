@@ -3,10 +3,15 @@ package com.msa.r2mobile
 import android.app.AlertDialog
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.OpenableColumns
+import android.text.method.LinkMovementMethod
+import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.activity.ComponentActivity
@@ -30,6 +35,23 @@ class MainActivity : ComponentActivity() {
     private lateinit var outputText: TextView
     private lateinit var scrollView: ScrollView
     private lateinit var cmdInput: EditText
+    private lateinit var progressBar: ProgressBar
+    private lateinit var statusText: TextView
+    private val handler = Handler(Looper.getMainLooper())
+    @Volatile private var runLabel = ""
+    @Volatile private var runStarted = 0L
+    /** Text of the last radare2 run, kept so the output filters can reuse it. */
+    @Volatile private var lastOutput: String? = null
+
+    /** Updates the elapsed-time line once a second while a command runs. */
+    private val ticker: Runnable = object : Runnable {
+        override fun run() {
+            if (running == null) return
+            val secs = (System.currentTimeMillis() - runStarted) / 1000
+            statusText.text = "Running: $runLabel (${secs}s), tap STOP to cancel"
+            handler.postDelayed(this, 1000)
+        }
+    }
 
     @Volatile private var targetPath: String? = null
     @Volatile private var loadedName: String? = null
@@ -54,6 +76,9 @@ class MainActivity : ComponentActivity() {
         outputText = findViewById(R.id.outputText)
         scrollView = findViewById(R.id.scrollView)
         cmdInput = findViewById(R.id.cmdInput)
+        progressBar = findViewById(R.id.progressBar)
+        statusText = findViewById(R.id.statusText)
+        outputText.movementMethod = LinkMovementMethod.getInstance()
 
         findViewById<Button>(R.id.openButton).setOnClickListener { pickFile.launch(arrayOf("*/*")) }
         findViewById<Button>(R.id.functionsButton).setOnClickListener { showFunctionMenu() }
@@ -84,6 +109,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        handler.removeCallbacks(ticker)
         stopRunning(quiet = true)
         worker.shutdownNow()
         super.onDestroy()
@@ -204,6 +230,11 @@ class MainActivity : ComponentActivity() {
             write(Console.Style.INFO, "  stop         stop a running command")
             write(Console.Style.INFO, "  save         save this screen to a text file")
             write(Console.Style.INFO, "  clear        clear this screen")
+            write(Console.Style.INFO, "  only WORD    show only output lines containing WORD (no WORD = all)")
+            write(Console.Style.INFO, "  range S E    show only lines whose address is between S and E (hex)")
+            write(Console.Style.INFO, "  tap address  any address in the output shows 24 instructions from there")
+            write(Console.Style.INFO, "  colours      pink loop, blue forward branch, green short jump,")
+            write(Console.Style.INFO, "               orange call, teal return")
             write(Console.Style.INFO, "  help         this list")
             write(Console.Style.INFO, "Anything else goes to radare2 as a command, e.g. iI or afl~main")
         }
@@ -237,6 +268,8 @@ class MainActivity : ComponentActivity() {
             lower == "status" -> showStatus()
             lower == "functions" || lower == "f" -> showFunctionMenu()
             lower == "filter" -> showFilterMenu()
+            lower == "only" || lower.startsWith("only ") -> onlyFilter(text.substring(4).trim())
+            lower.startsWith("range ") -> rangeFilter(text.substring(6).trim())
             lower == "save" -> saveLog()
             lower.startsWith("find ") -> {
                 val word = text.substring(5).trim()
@@ -329,14 +362,15 @@ class MainActivity : ComponentActivity() {
                     .apply { environment()["HOME"] = filesDir.absolutePath }
                     .start()
                 running = process
-                say(Console.Style.INFO, "running... (type 'stop' or tap STOP to cancel)")
+                startBusy(cmd)
                 startWatchdog(process, TIMEOUT_SECONDS)
                 val (text, truncated) = readCapped(process.inputStream)
                 if (truncated) process.destroy()
                 val code = process.waitFor()
                 running = null
+                lastOutput = text
                 ui {
-                    if (text.isBlank()) write(Console.Style.INFO, "(no output)") else writeOutput(text)
+                    if (text.isBlank()) write(Console.Style.INFO, "(no output)") else writeOutput(text) { tapAddress(it) }
                     if (truncated) {
                         write(
                             Console.Style.WARN,
@@ -345,14 +379,92 @@ class MainActivity : ComponentActivity() {
                     }
                     write(if (code == 0) Console.Style.OK else Console.Style.WARN, "done (exit $code)")
                 }
+                setIdle()
                 advice(if (code == 0) next else Advice.FAILED)
             } catch (e: Exception) {
                 running = null
+                setIdle()
                 say(Console.Style.ERROR, "could not start radare2: ${e.message}")
                 advice(Advice.FAILED)
             }
         }
     }
+
+    // ---- progress, taps and output filters ---------------------------------
+
+    /** Shows the progress bar and the elapsed-time line while radare2 runs. */
+    private fun startBusy(cmd: String) {
+        runLabel = cmd
+        runStarted = System.currentTimeMillis()
+        runOnUiThread {
+            progressBar.visibility = View.VISIBLE
+            handler.removeCallbacks(ticker)
+            handler.post(ticker)
+        }
+    }
+
+    private fun setIdle() {
+        runOnUiThread {
+            handler.removeCallbacks(ticker)
+            progressBar.visibility = View.GONE
+            statusText.text = "Idle"
+        }
+    }
+
+    /** Tapping an address shows the 24 instructions that start there. */
+    private fun tapAddress(addr: String) {
+        runR2("s $addr;pd 24", "tap another address, or type  only WORD  to filter this output.")
+    }
+
+    /** Shows only the lines of the last output that contain WORD. An empty WORD shows everything. */
+    private fun onlyFilter(word: String) {
+        val lines = lastLines() ?: return
+        val picked = if (word.isEmpty()) lines else lines.filter { it.contains(word, ignoreCase = true) }
+        showFiltered(picked, lines.size, if (word.isEmpty()) "all lines" else "lines with '$word'")
+    }
+
+    /** Shows only the lines of the last output whose address is inside START..END (hex). */
+    private fun rangeFilter(args: String) {
+        val parts = args.split(Regex("\\s+"))
+        val start = parts.getOrNull(0)?.let(::parseHex)
+        val end = parts.getOrNull(1)?.let(::parseHex)
+        if (start == null || end == null || end < start) {
+            say(Console.Style.WARN, "Use: range START END, in hex, e.g.  range 0x401000 0x401100")
+            advice("take the start and end from the addresses shown in the output.")
+            return
+        }
+        val lines = lastLines() ?: return
+        val picked = lines.filter { line ->
+            val a = Regex("^\\s*0x([0-9a-fA-F]+)").find(line)?.groupValues?.get(1)?.toLongOrNull(16)
+            a != null && a in start..end
+        }
+        showFiltered(picked, lines.size, "addresses ${args.trim()}")
+    }
+
+    private fun lastLines(): List<String>? {
+        val raw = lastOutput
+        if (raw == null) {
+            say(Console.Style.WARN, "No output to filter yet. Run a command first.")
+            advice("type  i  or  afl  first, then  only WORD  or  range START END.")
+            return null
+        }
+        return raw.trimEnd('\n').lines()
+    }
+
+    private fun showFiltered(picked: List<String>, total: Int, label: String) {
+        if (picked.isEmpty()) {
+            say(Console.Style.WARN, "No lines match $label (of $total).")
+            advice("try another word or range, or type  only  to see everything again.")
+            return
+        }
+        ui {
+            write(Console.Style.HEADER, "Filter: $label, ${picked.size} of $total lines")
+            writeOutput(picked.joinToString("\n")) { tapAddress(it) }
+        }
+        advice("tap an address to show its code, or filter again with  only WORD  or  range START END.")
+    }
+
+    private fun parseHex(s: String): Long? = s.removePrefix("0x").removePrefix("0X").toLongOrNull(16)
 
     /** Reads at most [MAX_OUTPUT] characters. Returns the text and whether it was cut short. */
     private fun readCapped(stream: InputStream): Pair<String, Boolean> {
