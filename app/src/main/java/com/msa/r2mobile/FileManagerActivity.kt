@@ -25,6 +25,8 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.core.content.FileProvider
 import java.io.File
+import java.io.IOException
+import java.security.MessageDigest
 import java.util.concurrent.Executors
 
 /**
@@ -431,13 +433,17 @@ class FileManagerActivity : Activity() {
                 }
                 val target = uniqueTarget(File(dest, src.name))
                 try {
-                    if (clipMove) {
-                        if (!src.renameTo(target)) {
-                            src.copyRecursively(target, overwrite = false)
-                            src.deleteRecursively()
-                        }
+                    if (clipMove && src.renameTo(target)) {
+                        // Same storage: an atomic rename, so there is nothing to verify.
                     } else {
                         src.copyRecursively(target, overwrite = false)
+                        if (!copyMatches(src, target)) {
+                            target.deleteRecursively()
+                            throw IOException("the copy of ${src.name} did not match, so the original was kept")
+                        }
+                        if (clipMove && !src.deleteRecursively()) {
+                            toast("copied ${src.name}, but the original could not be removed")
+                        }
                     }
                     done++
                 } catch (e: Exception) {
@@ -451,6 +457,30 @@ class FileManagerActivity : Activity() {
                 refreshBoth()
             }
         }
+    }
+
+    /** True when [copy] matches [src]: the same size and SHA-256 for files, the same names and sizes for folders. */
+    private fun copyMatches(src: File, copy: File): Boolean {
+        if (src.isDirectory) {
+            if (!copy.isDirectory) return false
+            fun tree(root: File): Map<String, Long> = root.walkTopDown().filter { it.isFile }
+                .associate { it.relativeTo(root).path to it.length() }
+            return tree(src) == tree(copy)
+        }
+        return copy.isFile && copy.length() == src.length() && sha256(src) == sha256(copy)
+    }
+
+    private fun sha256(f: File): String {
+        val md = MessageDigest.getInstance("SHA-256")
+        f.inputStream().use { input ->
+            val buf = ByteArray(65_536)
+            while (true) {
+                val n = input.read(buf)
+                if (n < 0) break
+                md.update(buf, 0, n)
+            }
+        }
+        return md.digest().joinToString("") { "%02x".format(it.toInt() and 0xFF) }
     }
 
     private fun deleteMarked() {

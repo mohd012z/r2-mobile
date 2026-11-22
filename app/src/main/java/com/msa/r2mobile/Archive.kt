@@ -22,6 +22,25 @@ object Archive {
 
     private val SUFFIXES = listOf(".tar.gz", ".tgz", ".tar", ".zip", ".gz")
 
+    /** Limits against zip bombs and runaway archives. Exceeding one refuses the whole extraction. */
+    private const val MAX_TOTAL_BYTES = 2L * 1024 * 1024 * 1024
+    private const val MAX_ENTRIES = 100_000
+    private const val MAX_RATIO = 200L
+    private const val RATIO_CHECK_FROM = 10L * 1024 * 1024
+
+    /** Running totals for one extraction. */
+    private class Budget {
+        var entries = 0
+        var bytes = 0L
+        fun entry() {
+            if (++entries > MAX_ENTRIES) throw IOException("archive has more than $MAX_ENTRIES entries: refused")
+        }
+        fun add(n: Long) {
+            bytes += n
+            if (bytes > MAX_TOTAL_BYTES) throw IOException("archive would unpack to more than 2 GB: refused")
+        }
+    }
+
     fun isArchive(name: String): Boolean =
         SUFFIXES.any { name.endsWith(it, ignoreCase = true) }
 
@@ -55,14 +74,14 @@ object Archive {
         dest.mkdirs()
         val name = file.name.lowercase()
         when {
-            name.endsWith(".zip") -> extractZip(file, dest)
+            name.endsWith(".zip") -> extractZip(file, dest, Budget())
             name.endsWith(".tar.gz") || name.endsWith(".tgz") ->
-                GZIPInputStream(file.inputStream().buffered()).use { untar(it, dest) }
-            name.endsWith(".tar") -> file.inputStream().buffered().use { untar(it, dest) }
+                GZIPInputStream(file.inputStream().buffered()).use { untar(it, dest, Budget()) }
+            name.endsWith(".tar") -> file.inputStream().buffered().use { untar(it, dest, Budget()) }
             name.endsWith(".gz") -> {
                 val target = safeFile(dest, stem(file.name))
                 GZIPInputStream(file.inputStream().buffered()).use { input ->
-                    target.outputStream().use { input.copyTo(it) }
+                    target.outputStream().use { copyBudget(input, it, Budget()) }
                 }
             }
             else -> throw IOException("not a supported archive: ${file.name}")
@@ -79,21 +98,25 @@ object Archive {
         }
     }
 
-    private fun extractZip(file: File, dest: File) {
+    private fun extractZip(file: File, dest: File, budget: Budget) {
         ZipFile(file).use { zip ->
             for (e in Collections.list(zip.entries())) {
+                budget.entry()
+                if (e.size >= RATIO_CHECK_FROM && e.compressedSize > 0 && e.size / e.compressedSize > MAX_RATIO) {
+                    throw IOException("${e.name} expands too much (zip bomb): refused")
+                }
                 val out = safeFile(dest, e.name)
                 if (e.isDirectory) {
                     out.mkdirs()
                 } else {
                     out.parentFile?.mkdirs()
-                    zip.getInputStream(e).use { input -> out.outputStream().use { input.copyTo(it) } }
+                    zip.getInputStream(e).use { input -> out.outputStream().use { copyBudget(input, it, budget) } }
                 }
             }
         }
     }
 
-    private fun untar(input: InputStream, dest: File) {
+    private fun untar(input: InputStream, dest: File, budget: Budget) {
         val header = ByteArray(512)
         while (true) {
             if (!readBlock(input, header)) break
@@ -103,6 +126,8 @@ object Archive {
                 .ifEmpty { "0" }.toLong(8)
             val type = header[156].toInt().toChar()
             val target = safeFile(dest, name)
+            budget.entry()
+            budget.add(size)
             when (type) {
                 '5' -> target.mkdirs()
                 '0', '\u0000' -> {
@@ -124,6 +149,16 @@ object Archive {
             throw SecurityException("unsafe entry $name")
         }
         return f
+    }
+
+    private fun copyBudget(input: InputStream, out: OutputStream, budget: Budget) {
+        val buf = ByteArray(8192)
+        while (true) {
+            val r = input.read(buf)
+            if (r < 0) break
+            budget.add(r.toLong())
+            out.write(buf, 0, r)
+        }
     }
 
     private fun readBlock(input: InputStream, buf: ByteArray): Boolean {

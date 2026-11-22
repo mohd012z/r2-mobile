@@ -220,7 +220,8 @@ class MainActivity : ComponentActivity() {
     private fun loadFile(uri: Uri) {
         try {
             val name = displayName(uri)
-            val dest = File(cacheDir, "target.bin")
+            // A new file per open, so a loaded target is never overwritten under another tab or session.
+            val dest = File(cacheDir, "target-${System.currentTimeMillis()}.bin")
             val total = contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length } ?: -1L
             contentResolver.openInputStream(uri)?.use { input ->
                 dest.outputStream().use { copyWithProgress(input, it, total) }
@@ -509,9 +510,10 @@ class MainActivity : ComponentActivity() {
                 startBusy(cmd)
                 startWatchdog(process, TIMEOUT_SECONDS)
                 phase = "[2/3] reading output"
-                val outFile = File(outputDir(), "msar2_output.txt")
+                // One file per run, so a later run or another tab never overwrites this output.
+                val outFile = File(outputDir(), "msar2_out_${System.currentTimeMillis()}.txt")
                 lastOutput = outFile
-                val lineCount = readToFile(process.inputStream, outFile)
+                val lineCount = readToFile(process.inputStream, outFile, process)
                 val code = process.waitFor()
                 running = null
                 phase = ""
@@ -691,7 +693,7 @@ class MainActivity : ComponentActivity() {
     private fun parseHex(s: String): Long? = s.removePrefix("0x").removePrefix("0X").toLongOrNull(16)
 
     /** Streams radare2 output into [out] with no size limit. Returns the number of lines. */
-    private fun readToFile(stream: InputStream, out: File): Int {
+    private fun readToFile(stream: InputStream, out: File, process: Process): Int {
         var lines = 0
         var bytes = 0L
         var reportedAt = 0L
@@ -701,9 +703,15 @@ class MainActivity : ComponentActivity() {
                 while (true) {
                     val n = input.read(buf)
                     if (n < 0) break
-                    file.write(buf, 0, n)
-                    bytes += n
-                    for (i in 0 until n) if (buf[i] == NEWLINE) lines++
+                    val take = minOf(n.toLong(), MAX_OUTPUT_BYTES - bytes).toInt()
+                    file.write(buf, 0, take)
+                    bytes += take
+                    for (i in 0 until take) if (buf[i] == NEWLINE) lines++
+                    if (take < n) {
+                        process.destroy()
+                        say(Console.Style.WARN, "output stopped at 512 MB to keep the phone responsive. Use a range, a filter or a smaller command.")
+                        break
+                    }
                     if (bytes - reportedAt >= 262_144) {
                         reportedAt = bytes
                         phase = "[2/3] reading output: $lines lines, ${bytes / 1024} KB so far"
@@ -1477,6 +1485,8 @@ class MainActivity : ComponentActivity() {
         private val DEX_NAME = Regex("classes\\d*\\.dex")
         /** Lines shown on screen at once; the full output stays in a file. */
         private const val DISPLAY_LINES = 3_000
+        /** Hard cap on one radare2 run's output file. */
+        private const val MAX_OUTPUT_BYTES = 512L * 1024 * 1024
         private const val MAX_PICK = 200_000
         private const val NEWLINE: Byte = 10
         private const val TIMEOUT_SECONDS = 900L
