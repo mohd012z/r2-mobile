@@ -107,6 +107,26 @@
                 android:layout_height="wrap_content"
                 android:text="Idle"
                 android:textSize="12sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/topButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Top" />
+
+                <Button
+                    android:id="@+id/bottomButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Bottom" />
+            </LinearLayout>
         </LinearLayout>
     </ScrollView>
 
@@ -114,18 +134,31 @@
         android:id="@+id/scrollView"
         android:layout_width="0dp"
         android:layout_height="match_parent"
-        android:layout_weight="0.6">
+        android:layout_weight="0.6"
+        android:fadeScrollbars="false"
+        android:scrollbarAlwaysDrawVerticalTrack="true"
+        android:scrollbarSize="10dp"
+        android:scrollbarStyle="insideOverlay">
 
-        <TextView
-            android:id="@+id/outputText"
+        <HorizontalScrollView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:background="#0B0F14"
-            android:fontFamily="monospace"
-            android:padding="8dp"
-            android:textColor="#D4D4D4"
-            android:textIsSelectable="true"
-            android:textSize="12sp" />
+            android:fadeScrollbars="false"
+            android:scrollbarAlwaysDrawHorizontalTrack="true"
+            android:scrollbarSize="10dp"
+            android:scrollbarStyle="insideOverlay">
+
+            <TextView
+                android:id="@+id/outputText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="monospace"
+                android:padding="8dp"
+                android:textColor="#D4D4D4"
+                android:textIsSelectable="true"
+                android:textSize="12sp" />
+        </HorizontalScrollView>
     </ScrollView>
 
 </LinearLayout>

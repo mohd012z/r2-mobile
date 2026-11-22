@@ -40,6 +40,8 @@ class MainActivity : ComponentActivity() {
     private val handler = Handler(Looper.getMainLooper())
     @Volatile private var runLabel = ""
     @Volatile private var runStarted = 0L
+    /** What the running command is doing right now, shown on the status line. */
+    @Volatile private var phase = ""
     /** Text of the last radare2 run, kept so the output filters can reuse it. */
     @Volatile private var lastOutput: String? = null
 
@@ -48,7 +50,7 @@ class MainActivity : ComponentActivity() {
         override fun run() {
             if (running == null) return
             val secs = (System.currentTimeMillis() - runStarted) / 1000
-            statusText.text = "Running: $runLabel (${secs}s), tap STOP to cancel"
+            statusText.text = "Running: $runLabel (${secs}s). $phase"
             handler.postDelayed(this, 1000)
         }
     }
@@ -88,6 +90,8 @@ class MainActivity : ComponentActivity() {
         findViewById<Button>(R.id.helpButton).setOnClickListener { showHelp() }
         findViewById<Button>(R.id.saveButton).setOnClickListener { saveLog() }
         findViewById<Button>(R.id.clearButton).setOnClickListener { clearConsole() }
+        findViewById<Button>(R.id.topButton).setOnClickListener { scrollView.fullScroll(ScrollView.FOCUS_UP) }
+        findViewById<Button>(R.id.bottomButton).setOnClickListener { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
         cmdInput.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_GO || actionId == EditorInfo.IME_ACTION_DONE) {
                 runTyped()
@@ -363,13 +367,19 @@ class MainActivity : ComponentActivity() {
                     .apply { environment()["HOME"] = filesDir.absolutePath }
                     .start()
                 running = process
+                val started = System.currentTimeMillis()
+                say(Console.Style.INFO, "[1/3] radare2 started, analysing the file")
                 startBusy(cmd)
                 startWatchdog(process, TIMEOUT_SECONDS)
+                phase = "[2/3] reading output"
                 val (text, truncated) = readCapped(process.inputStream)
                 if (truncated) process.destroy()
                 val code = process.waitFor()
                 running = null
                 lastOutput = text
+                phase = ""
+                val secs = (System.currentTimeMillis() - started) / 1000
+                say(Console.Style.INFO, "[3/3] finished in ${secs}s, ${text.lines().size} lines, exit $code")
                 ui {
                     if (text.isBlank()) write(Console.Style.INFO, "(no output)") else writeOutput(text) { tapAddress(it) }
                     if (truncated) {
@@ -472,10 +482,16 @@ class MainActivity : ComponentActivity() {
         val sb = StringBuilder()
         val reader = stream.bufferedReader()
         val chunk = CharArray(4096)
+        var reportedAt = 0
         while (true) {
             val n = reader.read(chunk)
             if (n < 0) return sb.toString() to false
             sb.append(chunk, 0, n)
+            if (sb.length - reportedAt >= 65_536) {
+                reportedAt = sb.length
+                val kb = sb.length / 1024
+                phase = "[2/3] reading output: $kb KB so far"
+            }
             if (sb.length > MAX_OUTPUT) return sb.substring(0, MAX_OUTPUT) to true
         }
     }
@@ -538,6 +554,7 @@ class MainActivity : ComponentActivity() {
 
     private fun nativeInfo(path: String, category: FileCategory) {
         val f = File(path)
+        say(Console.Style.INFO, "[1/2] reading file info (${f.length()} bytes)")
         ui {
             writeOutput(
                 "name: ${loadedName ?: f.name}\n" +
@@ -594,8 +611,11 @@ class MainActivity : ComponentActivity() {
                 say(Console.Style.WARN, "Manifest is too large to decode here (${entry.size} bytes).")
                 return@use
             }
+            say(Console.Style.INFO, "[1/3] extracting AndroidManifest.xml (${entry.size} bytes)")
             val bytes = zf.getInputStream(entry).use { it.readBytes() }
+            say(Console.Style.INFO, "[2/3] decoding binary XML")
             val xml = ManifestDecoder.decode(bytes)
+            say(Console.Style.INFO, "[3/3] decoded ${xml.lines().size} lines")
             ui {
                 write(Console.Style.HEADER, "AndroidManifest.xml (decoded)")
                 writeOutput(xml)
