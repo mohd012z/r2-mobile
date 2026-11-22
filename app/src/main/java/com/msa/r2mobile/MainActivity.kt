@@ -393,6 +393,7 @@ class MainActivity : ComponentActivity() {
             lower.startsWith("class ") -> containsFilter("class", text.substring(6).trim())
             lower == "translate" -> translateLast()
             lower == "dex" -> dexInspect()
+            lower == "flow" -> showFlow()
             lower == "decompile" || lower.startsWith("decompile ") -> decompile(text.substring(9).trim())
             lower.startsWith("range ") -> rangeFilter(text.substring(6).trim())
             lower == "save" -> saveLog()
@@ -891,6 +892,7 @@ class MainActivity : ComponentActivity() {
     private fun toggleFullscreen() {
         fullscreen = !fullscreen
         findViewById<View>(R.id.controlsPanel).visibility = if (fullscreen) View.GONE else View.VISIBLE
+        findViewById<Button>(R.id.fullscreenButton).text = if (fullscreen) "DEFAULT" else "FULL"
         window.decorView.systemUiVisibility = if (fullscreen) {
             View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
                 View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
@@ -1139,6 +1141,25 @@ class MainActivity : ComponentActivity() {
         showPlan(category)
     }
 
+    /** The whole APK workflow, in order, printed in the console. */
+    private fun showFlow() {
+        ui {
+            write(Console.Style.HEADER, "HOW TO ANALYZE AND MODIFY AN APK")
+            listOf(
+                "1. FILE > Open a file: pick your APK (or use the file manager, then Open in R2).",
+                "2. Type 1 (file info), then 20 (list contents).",
+                "3. Type 22 (decode AndroidManifest.xml). Note the permissions and the package name.",
+                "4. Type 21 (extract classes.dex). The target becomes classes.dex.",
+                "5. Type dex (classes, methods, strings). Narrow with  method NAME  or  regex PATTERN.",
+                "6. Note the address of the code you want. Read it with 13 or 15 (hex). Tap an address to read it.",
+                "7. To change code: VIEW > Mode: EDIT. Tap the address, change the bytes, press Compile copy.",
+                "8. Check the change: type  s ADDRESS;pd 5  and confirm the new instruction is there.",
+                "9. Rebuild and sign on your computer. FILE > How to analyze and modify an APK, and the patching guide, show the steps.",
+            ).forEach { write(Console.Style.INFO, it) }
+        }
+        advice("start with step 1: FILE > Open a file. Type flow at any time to see these steps again.")
+    }
+
     /** Lists classes, methods and readable strings of the loaded classes.dex. Read-only. */
     private fun dexInspect() {
         val path = targetPath
@@ -1262,12 +1283,12 @@ class MainActivity : ComponentActivity() {
         item("Clear the screen") { clearConsole() },
         item("Encrypt the file with a password (23)") { numbered(23) },
         item("Decrypt a .r2enc file (24)") { numbered(24) },
+        item("How to analyze and modify an APK (flow)") { showFlow() },
         item("Patch bytes, writes a copy (25)") { numbered(25) },
         item("Dual-pane file manager") { fileManagerResult.launch(Intent(this, FileManagerActivity::class.java)) },
     )
 
     private fun runMenu(): List<Pair<String, () -> Unit>> = listOf(
-        item("Run what is in the box") { runTyped() },
         item("Analyze the address in the box") { analyzeInput() },
         item("Block diagram of the code flow (27)") { numbered(27) },
         item("Stop a running command") { stopRunning(quiet = false) },

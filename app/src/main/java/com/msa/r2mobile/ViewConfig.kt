@@ -26,7 +26,7 @@ object ViewConfig {
     const val DEFAULT_FILE = 14f
     const val DEFAULT_CONSOLE = 12f
     const val DEFAULT_BUTTON = 12f
-    const val DEFAULT_CONSOLE_BG = "#0B0F14"
+    const val DEFAULT_CONSOLE_BG = "#000000"
     const val DEFAULT_CONSOLE_FG = "#C9D1D9"
 
     val FONT_NAMES = listOf("Monospace", "Sans-serif", "Serif")

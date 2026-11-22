@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Landscape: command box and four dropdown categories in a column on the left, output on the right. -->
+<!-- Landscape: controls in a column on the left, console on the right with FULL inside its corner. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -17,17 +17,35 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
-            <LinearLayout
+            <ProgressBar
+                android:id="@+id/progressBar"
+                style="?android:attr/progressBarStyleHorizontal"
                 android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:indeterminate="true"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/statusText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Idle"
+                android:textSize="12sp" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal">
 
                 <Button
                     android:id="@+id/tabMenuButton"
                     style="@style/CompactButton"
-                    android:layout_width="0dp"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
+                    android:minHeight="36dp"
+                    android:minWidth="0dp"
+                    android:paddingLeft="12dp"
+                    android:paddingRight="12dp"
                     android:text="Tab 1 ▼" />
 
                 <Button
@@ -35,8 +53,10 @@
                     style="@style/CompactButton"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:paddingLeft="18dp"
-                    android:paddingRight="18dp"
+                    android:minHeight="36dp"
+                    android:minWidth="0dp"
+                    android:paddingLeft="12dp"
+                    android:paddingRight="12dp"
                     android:text="+" />
             </LinearLayout>
 
@@ -56,20 +76,20 @@
                 android:orientation="horizontal">
 
                 <Button
-                    android:id="@+id/runButton"
-                    style="@style/CompactButton"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Run" />
-
-                <Button
                     android:id="@+id/functionsPickButton"
                     style="@style/CompactButton"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:text="Functions ▼" />
+
+                <Button
+                    android:id="@+id/runButton"
+                    style="@style/CompactButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Run" />
             </LinearLayout>
 
             <LinearLayout
@@ -91,7 +111,7 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="RUN ▼" />
+                    android:text="ANALYZE ▼" />
             </LinearLayout>
 
             <LinearLayout
@@ -115,60 +135,56 @@
                     android:layout_weight="1"
                     android:text="VIEW ▼" />
             </LinearLayout>
-
-            <Button
-                android:id="@+id/fullscreenButton"
-                style="@style/CompactButton"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="FULL SCREEN" />
-
-            <ProgressBar
-                android:id="@+id/progressBar"
-                style="?android:attr/progressBarStyleHorizontal"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:indeterminate="true"
-                android:visibility="gone" />
-
-            <TextView
-                android:id="@+id/statusText"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Idle"
-                android:textSize="12sp" />
         </LinearLayout>
     </ScrollView>
 
-    <ScrollView
-        android:id="@+id/scrollView"
+    <FrameLayout
         android:layout_width="0dp"
         android:layout_height="match_parent"
-        android:layout_weight="0.6"
-        android:fadeScrollbars="false"
-        android:scrollbarAlwaysDrawVerticalTrack="true"
-        android:scrollbarSize="10dp"
-        android:scrollbarStyle="insideOverlay">
+        android:layout_weight="0.6">
 
-        <HorizontalScrollView
+        <ScrollView
+            android:id="@+id/scrollView"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:background="#0B0F14"
+            android:layout_height="match_parent"
             android:fadeScrollbars="false"
-            android:scrollbarAlwaysDrawHorizontalTrack="true"
+            android:scrollbarAlwaysDrawVerticalTrack="true"
             android:scrollbarSize="10dp"
             android:scrollbarStyle="insideOverlay">
 
-            <TextView
-                android:id="@+id/outputText"
-                android:layout_width="wrap_content"
+            <HorizontalScrollView
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:fontFamily="monospace"
-                android:padding="8dp"
-                android:textColor="#D4D4D4"
-                android:textIsSelectable="true"
-                android:textSize="12sp" />
-        </HorizontalScrollView>
-    </ScrollView>
+                android:background="#000000"
+                android:fadeScrollbars="false"
+                android:scrollbarAlwaysDrawHorizontalTrack="true"
+                android:scrollbarSize="10dp"
+                android:scrollbarStyle="insideOverlay">
+
+                <TextView
+                    android:id="@+id/outputText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="monospace"
+                    android:padding="8dp"
+                    android:textColor="#C9D1D9"
+                    android:textIsSelectable="true"
+                    android:textSize="12sp" />
+            </HorizontalScrollView>
+        </ScrollView>
+
+        <Button
+            android:id="@+id/fullscreenButton"
+            style="@style/CompactButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|end"
+            android:layout_margin="4dp"
+            android:minHeight="36dp"
+            android:minWidth="0dp"
+            android:paddingLeft="10dp"
+            android:paddingRight="10dp"
+            android:text="FULL" />
+    </FrameLayout>
 
 </LinearLayout>
