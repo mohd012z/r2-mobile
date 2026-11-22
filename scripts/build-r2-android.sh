@@ -57,7 +57,7 @@ meson setup "$WORK/build" "$SRC" \
     --cross-file "$CROSS" \
     --prefix="$WORK/out" \
     --default-library=static \
-    -Dblob=true
+    -Dblob=false
 ninja -C "$WORK/build"
 ninja -C "$WORK/build" install
 
