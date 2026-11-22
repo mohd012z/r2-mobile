@@ -95,7 +95,11 @@ class MainActivity : ComponentActivity() {
 
     /** Applies the View settings: console text size and button text size. */
     private fun applyView() {
+        val p = ViewConfig.palette()
         outputText.textSize = ViewConfig.consoleText
+        outputText.typeface = ViewConfig.typeface()
+        outputText.setTextColor(p.text)
+        (outputText.parent as? View)?.setBackgroundColor(p.bg)
         ViewConfig.applyButtons(window.decorView)
     }
 

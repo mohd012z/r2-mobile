@@ -3,6 +3,7 @@ package com.msa.r2mobile
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
+import android.graphics.Typeface
 import android.net.Uri
 import android.os.Bundle
 import android.text.InputType
@@ -15,6 +16,7 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ListView
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.content.FileProvider
@@ -58,6 +60,8 @@ class FileManagerActivity : Activity() {
             override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
                 val v = super.getView(position, convertView, parent) as TextView
                 v.textSize = ViewConfig.fileText
+                v.typeface = ViewConfig.typeface()
+                v.setTextColor(ViewConfig.palette().text)
                 return v
             }
         }
@@ -123,6 +127,10 @@ class FileManagerActivity : Activity() {
             val mode = if (results != null) "SEARCH: ${results.size} found under ${dir.name}" else dir.absolutePath
             val readable = if (dir.canRead() || results != null) "" else "  (cannot read: Android blocks this folder)"
             header.text = "$mode$readable   marked: ${marked.size}"
+            val p = ViewConfig.palette()
+            header.setBackgroundColor(p.header)
+            header.setTextColor(p.text)
+            list.setBackgroundColor(p.bg)
         }
 
         private fun label(f: File?, searching: Boolean): String {
@@ -182,6 +190,7 @@ class FileManagerActivity : Activity() {
 
     private fun buildLayout() {
         root.removeAllViews()
+        root.setBackgroundColor(ViewConfig.palette().bg)
         val sideBySide = ViewConfig.sideBySide
         val panes = LinearLayout(this).apply {
             orientation = if (sideBySide) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
@@ -246,8 +255,9 @@ class FileManagerActivity : Activity() {
             "Share marked" to { share() },
             "Rename (one item)" to { rename() },
             "New folder" to { newFolder() },
-            "Zip marked" to { zipMarked() },
-            "Extract zip (one .zip)" to { unzipOne() },
+            "Compress marked (zip, tar.gz, gz)" to { zipMarked() },
+            "Extract archive (zip, tar, tar.gz, gz)" to { unzipOne() },
+            "View file (text or hex)" to { viewFile() },
             "Encrypt marked files (password)" to { encryptMarked() },
             "Decrypt .r2enc files (password)" to { decryptMarked() },
             "Delete marked" to { deleteMarked() },
@@ -403,63 +413,45 @@ class FileManagerActivity : Activity() {
     private fun zipMarked() {
         val files = targets() ?: return
         val dir = active?.dir ?: return
-        val name = if (files.size == 1) files[0].name else "archive"
-        worker.execute {
-            val out = uniqueTarget(File(dir, "$name.zip"))
-            try {
-                ZipOutputStream(out.outputStream().buffered()).use { zos ->
-                    files.forEach { addToZip(zos, it, it.name) }
+        val formats = Archive.Format.values()
+        AlertDialog.Builder(this)
+            .setTitle("Compress ${files.size} item(s) as")
+            .setItems(formats.map { it.label }.toTypedArray()) { _, i ->
+                val format = formats[i]
+                worker.execute {
+                    val base = if (files.size == 1) files[0].name else "archive"
+                    val out = uniqueTarget(File(dir, base + format.suffix))
+                    try {
+                        Archive.create(files, out, format)
+                        toast("made ${out.name}")
+                    } catch (e: Exception) {
+                        out.delete()
+                        toast("compress failed: ${e.message ?: e.javaClass.simpleName}")
+                    }
+                    runOnUiThread {
+                        active?.marked?.clear()
+                        refreshBoth()
+                    }
                 }
-                toast("made ${out.name}")
-            } catch (e: Exception) {
-                out.delete()
-                toast("zip failed: ${e.message ?: e.javaClass.simpleName}")
             }
-            runOnUiThread {
-                active?.marked?.clear()
-                refreshBoth()
-            }
-        }
-    }
-
-    private fun addToZip(zos: ZipOutputStream, f: File, entry: String) {
-        if (f.isDirectory) {
-            f.listFiles()?.forEach { addToZip(zos, it, "$entry/${it.name}") }
-        } else {
-            zos.putNextEntry(ZipEntry(entry))
-            f.inputStream().use { it.copyTo(zos) }
-            zos.closeEntry()
-        }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun unzipOne() {
         val files = targets() ?: return
         val f = files.singleOrNull() ?: run {
-            toast("mark exactly one .zip file.")
+            toast("mark exactly one archive file.")
             return
         }
-        if (!f.name.endsWith(".zip", ignoreCase = true)) {
-            toast("${f.name} is not a .zip file.")
+        if (!Archive.isArchive(f.name)) {
+            toast("${f.name} is not a supported archive: zip, tar, tar.gz or gz.")
             return
         }
         worker.execute {
-            val dest = uniqueTarget(File(f.parentFile, f.nameWithoutExtension))
+            val dest = uniqueTarget(File(f.parentFile, Archive.stem(f.name)))
             try {
-                dest.mkdirs()
-                val base = dest.canonicalPath + File.separator
-                ZipFile(f).use { zip ->
-                    for (e in Collections.list(zip.entries())) {
-                        val out = File(dest, e.name)
-                        // Stops entries such as ../../x from writing outside the new folder.
-                        if (!out.canonicalPath.startsWith(base)) throw SecurityException("unsafe entry ${e.name}")
-                        if (e.isDirectory) {
-                            out.mkdirs()
-                        } else {
-                            out.parentFile?.mkdirs()
-                            zip.getInputStream(e).use { input -> out.outputStream().use { input.copyTo(it) } }
-                        }
-                    }
-                }
+                Archive.extract(f, dest)
                 toast("extracted to ${dest.name}")
             } catch (e: Exception) {
                 toast("extract failed: ${e.message ?: e.javaClass.simpleName}")
@@ -470,6 +462,72 @@ class FileManagerActivity : Activity() {
             }
         }
     }
+
+    /** Shows the first 64 KB of one file: as text when it is text, otherwise as a hex dump. */
+    private fun viewFile() {
+        val files = targets() ?: return
+        val f = files.singleOrNull() ?: run {
+            toast("mark exactly one file to view.")
+            return
+        }
+        if (f.isDirectory) {
+            toast("choose a file, not a folder.")
+            return
+        }
+        worker.execute {
+            val bytes = try {
+                readPreview(f)
+            } catch (e: Exception) {
+                toast("cannot read ${f.name}: ${e.message ?: e.javaClass.simpleName}")
+                return@execute
+            }
+            val asText = looksLikeText(bytes)
+            val shown = when {
+                bytes.isEmpty() -> "(empty file)"
+                asText -> String(bytes, Charsets.UTF_8)
+                else -> hexDump(bytes)
+            }
+            val note = "${f.name}: ${humanSize(f.length())}. Showing the first ${humanSize(bytes.size.toLong())} " +
+                (if (asText) "as text." else "as hex (binary file).")
+            runOnUiThread {
+                val view = TextView(this).apply {
+                    typeface = ViewConfig.typeface()
+                    textSize = ViewConfig.consoleText
+                    setTextIsSelectable(true)
+                    setPadding(24, 16, 24, 16)
+                }
+                view.text = shown
+                AlertDialog.Builder(this)
+                    .setTitle("View ${f.name}")
+                    .setMessage(note)
+                    .setView(ScrollView(this).apply { addView(view) })
+                    .setPositiveButton("Close", null)
+                    .show()
+            }
+        }
+    }
+
+    private fun readPreview(f: File): ByteArray {
+        val buf = ByteArray(65_536)
+        val n = f.inputStream().use { it.read(buf) }
+        return if (n <= 0) ByteArray(0) else buf.copyOf(n)
+    }
+
+    private fun looksLikeText(bytes: ByteArray): Boolean {
+        if (bytes.isEmpty()) return true
+        if (bytes.any { it == 0.toByte() }) return false
+        val texty = bytes.count {
+            val c = it.toInt() and 0xFF
+            c in 9..13 || c in 32..126 || c >= 128
+        }
+        return texty >= bytes.size * 0.95
+    }
+
+    private fun hexDump(bytes: ByteArray): String = bytes.toList().chunked(16).mapIndexed { i, row ->
+        val hex = row.joinToString(" ") { "%02x".format(it.toInt() and 0xFF) }.padEnd(47)
+        val ascii = row.map { val c = it.toInt() and 0xFF; if (c in 32..126) c.toChar() else '.' }.joinToString("")
+        "%08x  %s  %s".format(i * 16, hex, ascii)
+    }.joinToString("\n")
 
     private fun askPassword(title: String, confirm: Boolean, then: (CharArray) -> Unit) {
         val type = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
