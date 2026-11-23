@@ -465,6 +465,7 @@ class MainActivity : ComponentActivity() {
             write(Console.Style.INFO, "               orange call, teal return")
             write(Console.Style.INFO, "  0x...        paste an address: shows its function, bytes, code and callers")
             write(Console.Style.INFO, "  analyze      same as pasting, using the address in the box (button ANALYZE)")
+            write(Console.Style.INFO, "  identify     find the ROOT CODE for ads / VIP / premium / pro in an APK")
             write(Console.Style.INFO, "  guide        step-by-step guide to addresses, offsets and patching")
             write(Console.Style.INFO, "  help         this list")
             write(Console.Style.INFO, "Anything else goes to radare2 as a command, e.g. iI or afl~main")
@@ -544,6 +545,7 @@ class MainActivity : ComponentActivity() {
             lower == "dex" -> dexInspect()
             lower == "flow" -> showFlow()
             lower == "decompile" || lower.startsWith("decompile ") -> decompile(text.substring(9).trim())
+            lower == "identify" || lower.startsWith("identify ") -> identifyShortcut()
             lower.startsWith("range ") -> rangeFilter(text.substring(6).trim())
             lower == "save" -> saveLog()
             lower.startsWith("hex ") -> hexView(text.substring(4).trim())
@@ -616,6 +618,7 @@ class MainActivity : ComponentActivity() {
             Action.TROUBLESHOOT -> troubleshoot()
             Action.NATIVE_EXTRACT_SO -> background(next) { extractSo(target) }
             Action.NATIVE_SUGGEST -> runR2("iS;ii;izz", next, onDone = { analyseSo() })
+            Action.NATIVE_IDENTIFY -> background(next) { identifyRootCode(target, current) }
         }
     }
 
@@ -1108,6 +1111,68 @@ class MainActivity : ComponentActivity() {
         advice("tap an address above to read the code, then EDIT mode to change bytes. Type  s ENTRY;pdc  for the entry code.")
     }
 
+    /**
+     * The "root code" for ads / VIP / premium / pro / trial / licence. Scans the app's DEX
+     * offline (DexScanner), ranks the gate methods, prints the top hits with their code
+     * offset and the reason they matched, plus the raw monetisation strings found. Then
+     * tells the user exactly how to open one in radare2.
+     */
+    private fun identifyRootCode(path: String, category: FileCategory) {
+        say(Console.Style.INFO, "scanning the bytecode for the ads / VIP / premium / pro gate (offline)…")
+        val result: DexScanner.Result =
+            if (category == FileCategory.DEX) DexScanner.scanDexFile(File(path))
+            else DexScanner.scanApk(File(path)) { dex ->
+                say(Console.Style.INFO, "  ${dex} …")
+            }
+        val lines = mutableListOf<Pair<Console.Style, String>>()
+        lines += Console.Style.HEADER to "ROOT CODE: ads / VIP / PREMIUM / PRO / trial / licence"
+        lines += Console.Style.INFO to
+            "scanned ${result.dexFiles.size} dex, ${result.totalStrings} strings, " +
+                "${result.totalClasses} classes, ${result.totalMethods} methods " +
+                "(${result.elapsedMs} ms). Nothing is changed."
+        val ranked = result.hits
+        if (ranked.isEmpty()) {
+            lines += Console.Style.WARN to "no strong hit in the bytecode. The gate is most likely in:"
+            lines += Console.Style.INFO to "  - a native library  -> 30 to extract the .so, then 31 for suggestions"
+            lines += Console.Style.INFO to "  - a JS / WebView bundle  -> 20 to list the apk, look under assets/*.js"
+            lines += Console.Style.INFO to "  - a packed dex  -> the DEX is encrypted; it must be dumped on a device first"
+        } else {
+            lines += Console.Style.INFO to "top ${ranked.size} gate method(s), best first (score = strength of the match):"
+            ranked.forEachIndexed { i, h ->
+                val rank = if (i < 5) "*" else " "
+                val cls = h.className.substringAfterLast('/')
+                lines += Console.Style.OUTPUT to
+                    " $rank[$i + 1] ${h.score}  ${cls}.${h.methodName}   ${h.dexName}  code@0x${h.codeOff.toString(16)}"
+                lines += Console.Style.INFO to "     why: ${h.why.joinToString(", ")}"
+                if (h.strings.isNotEmpty()) {
+                    lines += Console.Style.INFO to
+                        "     strings: ${h.strings.take(5).joinToString(" | ") { it.take(60) }}"
+                }
+            }
+        }
+        if (result.stringHits.isNotEmpty()) {
+            lines += Console.Style.INFO to "monetisation strings found in the bytecode (first ${result.stringHits.size}):"
+            result.stringHits.take(24).forEach { s ->
+                lines += Console.Style.OUTPUT to "     \"${s.take(80)}\""
+            }
+            if (result.stringHits.size > 24) lines += Console.Style.INFO to "     … ${result.stringHits.size - 24} more (use 'save' to keep them all)"
+        }
+        lines += Console.Style.WARN to "HOW TO READ A HIT IN RADARE2 (this is the root code)"
+        lines += Console.Style.INFO to "  1. Take a hit's code offset, e.g. 0x13e34, and its dex name, e.g. classes4.dex."
+        lines += Console.Style.INFO to "  2. Open that dex:  FILE > Open a file  -> pick classes4.dex (or 21 to extract it from the APK)."
+        lines += Console.Style.INFO to "  3. Type:  s 0x13e34;pd 40   to read the Dalvik code of that method."
+        lines += Console.Style.INFO to "  4. The const-string references above the jumps tell you what it unlocks. A 'return' " +
+            "right after a compare is usually the VIP/ads decision point to patch."
+        lines += Console.Style.INFO to "  5. To change it: VIEW > Mode: EDIT, tap the address, replace the bytes, Compile copy."
+        ui { lines.forEach { (style, text) -> write(style, text) } }
+        if (ranked.isNotEmpty()) {
+            val top = ranked.first()
+            advice("open ${top.dexName} with FILE > Open a file, then type  s 0x${top.codeOff.toString(16)};pd 40  to read that root code.")
+        } else {
+            advice("the gate is probably native or in JS: run 30 to extract the .so, or 20 to list the apk contents.")
+        }
+    }
+
     private fun decodeManifest(path: String) {
         ZipFile(File(path)).use { zf ->
             val entry = zf.getEntry("AndroidManifest.xml")
@@ -1437,6 +1502,12 @@ class MainActivity : ComponentActivity() {
         advice("start with step 1: FILE > Open a file. Type flow at any time to see these steps again.")
     }
 
+    /** Runs the root-code identifier (function 32). */
+    private fun identifyShortcut() {
+        Catalog.all.firstOrNull { it.action == Action.NATIVE_IDENTIFY }?.let { executeFeature(it) }
+            ?: say(Console.Style.WARN, "the identify function is not available in this build.")
+    }
+
     /** Lists classes, methods and readable strings of the loaded classes.dex. Read-only. */
     private fun dexInspect() {
         val path = targetPath
@@ -1590,6 +1661,7 @@ class MainActivity : ComponentActivity() {
             cmdInput.requestFocus()
         },
         item("DEX inspector: classes, methods, strings (type dex)") { dexInspect() },
+        item("Find the ROOT CODE for ads / VIP / premium / pro (type identify)") { identifyShortcut() },
         item("Decompile a native function to C-like code (type decompile)") { typeInBox("decompile ") },
         item("DEX: list classes (ic)") { runR2("ic", "type  regex Lcom/  or  class NAME  to narrow the list.") },
         item("DEX: filter by method name") { typeInBox("method ") },
