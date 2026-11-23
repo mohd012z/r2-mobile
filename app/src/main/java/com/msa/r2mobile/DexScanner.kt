@@ -56,6 +56,7 @@ object DexScanner {
         "vip" to 6, "isvip" to 6, "_vip" to 6, "vip_" to 6, "vipstatus" to 6, "is_vip" to 6,
         "premium" to 5, "ispremium" to 5, "_premium" to 5,
         "ispro" to 6, "is_pro" to 6, "_pro" to 4, "pro_" to 3,
+        "plus" to 4, "isplus" to 5,
         "trial" to 4, "istrial" to 5, "is_trial" to 5,
         "license" to 5, "licence" to 5, "islicensed" to 5,
         "subscri" to 5, "subscription" to 5, "is_subscribed" to 5,
@@ -72,6 +73,7 @@ object DexScanner {
     private val STR_KW = linkedMapOf(
         "vip" to 4, "premium" to 4, "is_vip" to 4, "is_pro" to 4, "pro_plan" to 4,
         "trial" to 3, "license" to 4, "licence" to 4, "subscri" to 4, "entitlement" to 3,
+        "plus" to 2, "is_plus" to 3, "plus_member" to 3, "plus_plan" to 3,
         "admob" to 5, "interstitial" to 5, "rewarded" to 5, "banner" to 3, "purchase" to 3,
         "upgrade" to 2, "paywall" to 4, "show_vip" to 3,
     )
@@ -268,14 +270,16 @@ object DexScanner {
             repeat(dmsz) {
                 midx += uleb(o); o += ulebSize(o)
                 val acc = uleb(o); o += ulebSize(o)
-                val code = uleb(o)
+                val code = uleb(o); o += ulebSize(o)
+                if (midx >= methodCount || (code != 0 && code and 3 != 0)) return out // desync guard
                 out += MethodRef(midx, acc, code)
             }
             midx = 0
             repeat(vmsz) {
                 midx += uleb(o); o += ulebSize(o)
                 val acc = uleb(o); o += ulebSize(o)
-                val code = uleb(o)
+                val code = uleb(o); o += ulebSize(o)
+                if (midx >= methodCount || (code != 0 && code and 3 != 0)) return out // desync guard
                 out += MethodRef(midx, acc, code)
             }
             return out
