@@ -4,7 +4,7 @@ package com.msa.r2mobile
 enum class Action {
     R2, NATIVE_INFO, NATIVE_ZIP_LIST, NATIVE_EXTRACT_DEX, NATIVE_MANIFEST,
     NATIVE_ENCRYPT, NATIVE_DECRYPT, NATIVE_PATCH, GUIDE, R2_BLOCKS, R2_REFERENCE, TROUBLESHOOT,
-    NATIVE_EXTRACT_SO, NATIVE_SUGGEST,
+    NATIVE_EXTRACT_SO, NATIVE_SUGGEST, NATIVE_IDENTIFY,
 }
 
 /**
@@ -28,6 +28,7 @@ object Catalog {
     )
     private val EVERYTHING = FileCategory.values().toSet()
     private val ARCHIVES = setOf(FileCategory.APK, FileCategory.JAR, FileCategory.ZIP)
+    private val APK_DEX = setOf(FileCategory.APK, FileCategory.DEX)
 
     private val list = mutableListOf<Feature>()
 
@@ -126,6 +127,12 @@ object Catalog {
             "Reads the library's sections, imported calls and readable strings, then suggests where a change is " +
             "possible: writable and executable sections, the calls to review, and the text you can change. " +
             "It only suggests. Nothing is written until you use EDIT mode, and changes go to a copy.")
+        add("Identify", "Find the root code for ADS / VIP / PREMIUM / PRO", Action.NATIVE_IDENTIFY, "", APK_DEX,
+            "Reads the app's bytecode (all classes*.dex) offline and ranks the methods that are the ROOT CODE " +
+            "for ads, VIP, premium, pro, trial and licence: a method whose name matches, or whose const-string " +
+            "references match, a monetisation word. Each hit shows the class, method, the code offset and WHY " +
+            "it matched. Take the top hit's offset, open that classes.dex, and read the method in radare2. " +
+            "Nothing is changed. If it finds little, the gate is in a native .so (run 31) or a JS/WebView bundle.")
     }
 
     val all: List<Feature> get() = list
