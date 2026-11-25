@@ -30,6 +30,7 @@ object Advice {
         19 to "matches show addresses. Paste one in the box and press RUN.",
         20 to "the list shows what is inside. Type 21 to extract classes.dex, which holds the app code.",
         21 to "classes.dex is now the target. Type 1 (file info), then 11 (auto-analyze).",
+        33 to "a HIGH finding with a patch is a one-tap byte patch away: note its address, then use EDIT mode or the console 'wx <bytes> @<addr>'. The Frida hook text it prints is ready to paste into Frida.",
     )
 
     fun afterFunction(number: Int): String = hints[number] ?: GENERIC

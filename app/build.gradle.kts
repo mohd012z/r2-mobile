@@ -11,8 +11,8 @@ android {
         applicationId = "com.msa.r2mobile"
         minSdk = 26
         targetSdk = 34
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.3.0"
         ndk {
             // Poco F6 Pro is arm64-v8a. The bundled radare2 binary is built for this ABI only.
             abiFilters += listOf("arm64-v8a")

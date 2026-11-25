@@ -1,0 +1,119 @@
+{
+  "id": "builtin-anti-tamper",
+  "name": "Root, Frida & Anti-Debug",
+  "version": "1.0",
+  "author": "ELFTrace",
+  "description": "Finds common root, Frida, Xposed, and ptrace anti-tamper indicators.",
+  "rules": [
+    {
+      "name": "ptrace Symbol",
+      "type": "symbol",
+      "pattern": "ptrace",
+      "severity": "HIGH",
+      "description": "Anti-debug ptrace call"
+    },
+    {
+      "name": "Frida Reference",
+      "type": "string",
+      "pattern": "frida",
+      "case_sensitive": true,
+      "match_mode": "word_boundary",
+      "severity": "HIGH",
+      "description": "Standalone 'frida' token (case-sensitive)"
+    },
+    {
+      "name": "Frida Agent Artifact",
+      "type": "string",
+      "pattern": "frida-agent",
+      "severity": "HIGH",
+      "description": "Frida agent library loaded"
+    },
+    {
+      "name": "Frida Gadget Artifact",
+      "type": "string",
+      "pattern": "frida-gadget",
+      "severity": "HIGH",
+      "description": "Frida gadget library loaded"
+    },
+    {
+      "name": "Frida Server Artifact",
+      "type": "string",
+      "pattern": "frida-server",
+      "severity": "HIGH",
+      "description": "Frida server binary path"
+    },
+    {
+      "name": "Frida RPC Artifact",
+      "type": "string",
+      "pattern": "frida:rpc",
+      "severity": "HIGH",
+      "description": "Frida JS RPC channel"
+    },
+    {
+      "name": "Frida Java Bridge",
+      "type": "string",
+      "pattern": "re.frida.",
+      "severity": "MEDIUM",
+      "description": "Frida Java bridge class/package namespace"
+    },
+    {
+      "name": "Frida JS Loop Thread",
+      "type": "string",
+      "pattern": "gum-js-loop",
+      "severity": "HIGH",
+      "description": "Frida Gum JS loop thread name"
+    },
+    {
+      "name": "Frida GLib Main Thread",
+      "type": "string",
+      "pattern": "gmain",
+      "case_sensitive": true,
+      "match_mode": "word_boundary",
+      "severity": "MEDIUM",
+      "description": "Frida GLib main thread name (exact token)"
+    },
+    {
+      "name": "Frida Default Port",
+      "type": "string",
+      "pattern": "27042",
+      "match_mode": "word_boundary",
+      "severity": "INFO",
+      "description": "Frida default TCP port 27042 (low signal)"
+    },
+    {
+      "name": "Magisk / Su String",
+      "type": "string",
+      "pattern": "/system/bin/su",
+      "severity": "MEDIUM",
+      "description": "Root binary path check"
+    },
+    {
+      "name": "TracerPid Check",
+      "type": "string",
+      "pattern": "TracerPid",
+      "severity": "MEDIUM",
+      "description": "/proc/self/status TracerPid anti-debug check"
+    },
+    {
+      "name": "/proc/self/status Read",
+      "type": "string",
+      "pattern": "/proc/self/status",
+      "severity": "MEDIUM",
+      "description": "Process status read (TracerPid anti-debug)"
+    },
+    {
+      "name": "dlopen",
+      "type": "symbol",
+      "pattern": "dlopen",
+      "severity": "MEDIUM",
+      "description": "Dynamic loader import (runtime/decrypted loading = packing)"
+    },
+    {
+      "name": "dlsym",
+      "type": "symbol",
+      "pattern": "dlsym",
+      "severity": "LOW",
+      "description": "Dynamic symbol resolver"
+    }
+  ]
+}
