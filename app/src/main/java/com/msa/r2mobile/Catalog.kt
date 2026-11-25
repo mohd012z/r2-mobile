@@ -4,7 +4,7 @@ package com.msa.r2mobile
 enum class Action {
     R2, NATIVE_INFO, NATIVE_ZIP_LIST, NATIVE_EXTRACT_DEX, NATIVE_MANIFEST,
     NATIVE_ENCRYPT, NATIVE_DECRYPT, NATIVE_PATCH, GUIDE, R2_BLOCKS, R2_REFERENCE, TROUBLESHOOT,
-    NATIVE_EXTRACT_SO, NATIVE_SUGGEST, NATIVE_IDENTIFY,
+    NATIVE_EXTRACT_SO, NATIVE_SUGGEST, NATIVE_IDENTIFY, NATIVE_SCAN,
 }
 
 /**
@@ -133,6 +133,14 @@ object Catalog {
             "references match, a monetisation word. Each hit shows the class, method, the code offset and WHY " +
             "it matched. Take the top hit's offset, open that classes.dex, and read the method in radare2. " +
             "Nothing is changed. If it finds little, the gate is in a native .so (run 31) or a JS/WebView bundle.")
+        add("Modify", "Security scan the .so (plugins: SSL, Frida, packers, JNI…)", Action.NATIVE_SCAN, "",
+            setOf(FileCategory.ELF_SHARED, FileCategory.ELF_EXEC),
+            "Runs the built-in security plugin set on a native library, like the ELFTrace app does but on this " +
+            "app's radare2 engine: SSL pinning, Frida/root/anti-debug (ptrace), JNI entrypoints, packers (DPLF, " +
+            "360 Jiagu, Legu, Bangcle, PairIP), Flutter/RN, il2cpp, crypto tables, IAP/license checks, Play " +
+            "Integrity, direct syscalls and watchdog/abort call sites. Every hit shows SEVERITY, the address, " +
+            "and a suggested one-tap patch (Ret True / Ret False / Ret Void / NOP). High findings with a patch " +
+            "also print a ready-to-paste Frida hook script. It only reports — it writes nothing.")
     }
 
     val all: List<Feature> get() = list

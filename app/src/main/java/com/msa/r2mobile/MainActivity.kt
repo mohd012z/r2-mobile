@@ -619,6 +619,7 @@ class MainActivity : ComponentActivity() {
             Action.NATIVE_EXTRACT_SO -> background(next) { extractSo(target) }
             Action.NATIVE_SUGGEST -> runR2("iS;ii;izz", next, onDone = { analyseSo() })
             Action.NATIVE_IDENTIFY -> background(next) { identifyRootCode(target, current) }
+            Action.NATIVE_SCAN -> background(next) { scanElf(target, current) }
         }
     }
 
@@ -1171,6 +1172,77 @@ class MainActivity : ComponentActivity() {
         } else {
             advice("the gate is probably native or in JS: run 30 to extract the .so, or 20 to list the apk contents.")
         }
+    }
+
+    /** #33 — Security-scan a native library with the ELFTrace plugin set (run on our radare2 engine). */
+    private fun scanElf(path: String, category: FileCategory) {
+        val file = File(path)
+        if (!r2Binary.exists()) {
+            say(Console.Style.ERROR, "The radare2 engine (libr2.so) is missing from this build.")
+            advice("rebuild the APK with GitHub Actions.")
+            return
+        }
+        val (arch, bits) = ElfScan.elfArch(file)
+        say(Console.Style.INFO, "scanning ${file.name} — $arch $bits-bit, loading plugins…")
+        val pluginTexts = ArrayList<Pair<String, String>>()
+        try {
+            val names = assets.list("plugins") ?: emptyArray()
+            for (n in names) if (n.endsWith(".json")) {
+                pluginTexts.add(n to assets.open(n).bufferedReader().use { it.readText() })
+            }
+        } catch (e: Exception) {
+            say(Console.Style.ERROR, "could not read plugins: ${e.message}")
+            return
+        }
+        if (pluginTexts.isEmpty()) {
+            say(Console.Style.ERROR, "no plugins found in assets/plugins.")
+            return
+        }
+        val r2 = { cmd: String ->
+            quickRun(r2Binary.absolutePath, "-N", "-e", "scr.color=0", "-qc", cmd, path) ?: ""
+        }
+        val result = ElfScan.scan(file, { pluginTexts }, r2)
+        val lines = mutableListOf<Pair<Console.Style, String>>()
+        lines += Console.Style.HEADER to "== ELF security scan: ${file.name} ($arch $bits)"
+        lines += Console.Style.INFO to "plugins ${result.plugins} · rules ${result.rulesRun} · findings ${result.findings.size} · ${result.elapsedMs} ms"
+        if (result.findings.isEmpty()) {
+            lines += Console.Style.OK to "no matches for the built-in plugin set."
+            lines += Console.Style.INFO to "that does NOT mean it is clean: packers hide symbols in .rodata, and gates may live in the DEX (run 32)."
+        } else {
+            val high = result.findings.filter { it.severity == "HIGH" }
+            val med = result.findings.filter { it.severity == "MEDIUM" }
+            lines += Console.Style.OUTPUT to ""
+            for (f in result.findings) {
+                val sev = when (f.severity) {
+                    "HIGH" -> Console.Style.ERROR
+                    "MEDIUM" -> Console.Style.WARN
+                    else -> Console.Style.INFO
+                }
+                val addr = if (f.vaddr != 0L) " @ 0x${f.vaddr.toString(16)}"
+                    else if (f.offset != 0L) " (file+0x${f.offset.toString(16)})" else ""
+                val sym = if (f.symbol.isNotEmpty()) "  ${f.symbol}" else ""
+                lines += sev to "[${f.severity}] ${f.rule}$addr$sym"
+                if (f.description.isNotEmpty()) lines += Console.Style.OUTPUT to "       ${f.description}"
+                if (f.matched.isNotEmpty() && f.matched.length <= 90) lines += Console.Style.ADDRESS to "       match: ${f.matched}"
+                val patch = f.patch
+                if (patch != null) {
+                    val bytes = ElfScan.QuickPatch.bytes(patch.value, arch, bits)
+                    if (bytes != null) {
+                        val pv = if (f.vaddr != 0L) f.vaddr else f.offset
+                        lines += Console.Style.OK to "       PATCH: ${patch.value} → ${ElfScan.QuickPatch.toHex(bytes)}  (wx ${ElfScan.QuickPatch.toHex(bytes).lowercase().replace(" ", " ") } @0x${pv.toString(16)})"
+                        if (f.severity == "HIGH" && f.vaddr != 0L) {
+                            val mod = file.name
+                            val hook = ElfScan.fridaHook(mod, f.vaddr)
+                            lines += Console.Style.ADVICE to "       FRIDA:\n" + hook.lines().joinToString("\n") { "               $it" }
+                        }
+                    }
+                }
+            }
+            lines += Console.Style.OUTPUT to ""
+            lines += Console.Style.HEADER to "summary: ${high.size} HIGH · ${med.size} MEDIUM · ${result.findings.size - high.size - med.size} INFO/LOW"
+        }
+        ui { lines.forEach { (style, text) -> write(style, text, newline = text.contains('\n')) } }
+        advice(Advice.afterFunction(33))
     }
 
     private fun decodeManifest(path: String) {
