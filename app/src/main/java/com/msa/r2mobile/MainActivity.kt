@@ -1674,7 +1674,53 @@ class MainActivity : ComponentActivity() {
     )
 
     /** Radare2 plugins: each one is a ready-made radare2 command, run inside the bundled engine. */
+    private fun showRuntimeLab() {
+        val input = EditText(this).apply {
+            hint = "Paste diagnostic log from an authorized test"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+            minLines = 5
+            maxLines = 12
+            filters = arrayOf(android.text.InputFilter.LengthFilter(262144))
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Runtime Lab — offline")
+            .setView(input)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Analyze") { _, _ ->
+                val log = input.text.toString()
+                worker.execute {
+                    val report = runCatching {
+                        buildString {
+                            appendLine("Candidate findings — verify against matching build")
+                            RuntimeDiagnostics.findings(log).forEach {
+                                appendLine(it.category + ": " + it.advice)
+                                appendLine("Required: " + it.required.joinToString())
+                            }
+                            appendLine("Stack frames (not confirmed root causes):")
+                            RuntimeDiagnostics.frames(log).forEach {
+                                appendLine("${it.owner}.${it.method} — ${it.file}:${it.line}")
+                            }
+                            appendLine("Next: reproduce, inspect matching source, test repair.")
+                        }
+                    }.getOrElse { "Analysis failed: " + (it.message ?: "unknown error") }
+                    handler.post {
+                        if (!isFinishing && !isDestroyed) {
+                            val result = TextView(this).apply {
+                                text = report
+                                setTextIsSelectable(true)
+                                setPadding(24, 16, 24, 16)
+                            }
+                            val scroll = ScrollView(this).apply { addView(result) }
+                            AlertDialog.Builder(this).setTitle("Runtime analysis")
+                                .setView(scroll).setPositiveButton("Close", null).show()
+                        }
+                    }
+                }
+            }.show()
+    }
+
     private fun pluginMenu(): List<Pair<String, () -> Unit>> = listOf(
+        item("Runtime Lab: analyze diagnostic log") { showRuntimeLab() },
         item("Hash: MD5 and SHA-256 of the file") {
             runR2("ph md5 \$s; ph sha256 \$s", "compare the hash with the one published by the vendor to confirm the file is unchanged.")
         },
