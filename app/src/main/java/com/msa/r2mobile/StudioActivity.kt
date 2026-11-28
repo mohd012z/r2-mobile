@@ -35,7 +35,7 @@ class StudioActivity : ComponentActivity() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean = true
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse {
                 if (request.url.toString() == origin && request.method == "GET") {
-                    return WebResourceResponse("text/html", "UTF-8", assets.open("msa_re_studio_v18.html"))
+                    return WebResourceResponse("text/html", "UTF-8", assets.open("msa_re_studio_v31.html"))
                 }
                 return WebResourceResponse("text/plain", "UTF-8", 403, "Blocked", emptyMap(), java.io.ByteArrayInputStream(ByteArray(0)))
             }
