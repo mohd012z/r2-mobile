@@ -21,7 +21,7 @@ class SplashActivity : ComponentActivity() {
 
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var title: TextView
-    private val fullTitle = "R2 MOBILE"
+    private val fullTitle = "MSA RE STUDIO"
     private var typed = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -38,7 +38,7 @@ class SplashActivity : ComponentActivity() {
             setShadowLayer(18f, 0f, 0f, Color.parseColor("#00E676"))
         }
         val subtitle = TextView(this).apply {
-            text = "radare2 reverse engineering\nwelcome. loading the engine..."
+            text = "offline analysis workspace\nloading Studio..."
             textSize = 14f
             typeface = Typeface.MONOSPACE
             gravity = Gravity.CENTER
@@ -55,7 +55,7 @@ class SplashActivity : ComponentActivity() {
 
         handler.post(typeTitle)
         handler.postDelayed({
-            startActivity(Intent(this, MainActivity::class.java))
+            startActivity(Intent(this, StudioActivity::class.java))
             finish()
         }, SPLASH_MS)
     }
