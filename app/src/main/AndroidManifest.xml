@@ -10,7 +10,7 @@
         android:maxSdkVersion="32" />
 
     <application
-        android:label="R2 Mobile"
+        android:label="MSA RE Studio"
         android:icon="@mipmap/ic_launcher"
         android:supportsRtl="true"
         android:extractNativeLibs="true"
@@ -26,6 +26,7 @@
             </intent-filter>
         </activity>
 
+        <activity android:name=".StudioActivity" android:exported="false" />
         <activity
             android:name=".MainActivity"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize"
